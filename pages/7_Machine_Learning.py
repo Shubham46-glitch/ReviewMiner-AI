@@ -1,0 +1,144 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import time
+import joblib
+import plotly.express as px
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
+from ui_utils import setup_page, custom_metric_card, apply_plotly_theme
+
+setup_page("Machine Learning Dashboard", "Train and evaluate sentiment classification models.", "🤖")
+
+@st.cache_data
+def load_data():
+    try:
+        df = pd.read_csv("product_reviews_cleaned.csv")
+        df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
+        df = df[df['Cleaned_Text'].str.strip() != ""] 
+        return df
+    except FileNotFoundError:
+        st.error("Dataset not found! Please run the preprocessing script.")
+        st.stop()
+
+df = load_data()
+
+st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+st.header("1️⃣ Data Preparation")
+col1, col2, col3 = st.columns(3)
+with col1:
+    custom_metric_card("Total Samples", f"{len(df):,}", "Cleaned records", icon="📄")
+with col2:
+    custom_metric_card("Classes", df['Label'].nunique(), "Categories", icon="🏷️", color="#06B6D4")
+with col3:
+    custom_metric_card("Missing Values", df.isnull().sum().sum(), "NaT/NaN", icon="✅", color="#22C55E")
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+st.header("2️⃣ Feature Extraction (TF-IDF)")
+X = df['Cleaned_Text']
+y = df['Label']
+
+vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
+X_vec = vectorizer.fit_transform(X)
+vocab_size = len(vectorizer.vocabulary_)
+matrix_shape = X_vec.shape
+
+col_tf1, col_tf2 = st.columns(2)
+with col_tf1:
+    custom_metric_card("Vocabulary Size", f"{vocab_size:,}", "Unique Words Extract", icon="📚", color="#7C3AED")
+with col_tf2:
+    custom_metric_card("Matrix Shape", f"{matrix_shape[0]} × {matrix_shape[1]}", "Rows by Cols", icon="🧮", color="#06B6D4")
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+st.header("3️⃣ Train Test Split")
+X_train, X_test, y_train, y_test = train_test_split(X_vec, y, test_size=0.2, random_state=42, stratify=y)
+col_tt1, col_tt2 = st.columns(2)
+with col_tt1:
+    custom_metric_card("Training Set (80%)", X_train.shape[0], "Samples", icon="🏋️", color="#FACC15")
+with col_tt2:
+    custom_metric_card("Testing Set (20%)", X_test.shape[0], "Samples", icon="🧪", color="#EF4444")
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+st.header("4️⃣ Model Training & Evaluation")
+st.markdown("<p style='color: #94A3B8;'>Compare Multinomial Naive Bayes, Logistic Regression, and Linear SVM.</p>", unsafe_allow_html=True)
+
+models = {
+    "Multinomial Naive Bayes": MultinomialNB(),
+    "Logistic Regression": LogisticRegression(max_iter=1000),
+    "Linear SVM": SVC(kernel='linear', probability=True)
+}
+
+if st.button("🚀 Train Models Now", type="primary"):
+    with st.spinner("Training models..."):
+        results = []
+        trained_models = {}
+        for name, model in models.items():
+            start = time.time()
+            model.fit(X_train, y_train)
+            train_t = time.time() - start
+            y_pred = model.predict(X_test)
+            acc = accuracy_score(y_test, y_pred)
+            prec = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+            rec = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+            f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+            trained_models[name] = model
+            results.append({
+                "Algorithm": name, "Accuracy": acc, "Precision": prec, "Recall": rec, "F1 Score": f1, "Train Time (s)": round(train_t, 4)
+            })
+            
+        results_df = pd.DataFrame(results)
+        best_idx = results_df['F1 Score'].idxmax()
+        best_name = results_df.loc[best_idx, 'Algorithm']
+        best_model = trained_models[best_name]
+        
+        st.success(f"Models Trained! 🏆 Winner: {best_name}")
+        st.dataframe(results_df.style.highlight_max(subset=['F1 Score', 'Accuracy'], color='#06B6D4', axis=0).format(precision=4), use_container_width=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.header("5️⃣ Confusion Matrix")
+        y_pred_best = best_model.predict(X_test)
+        labels = sorted(y.unique().tolist())
+        cm = confusion_matrix(y_test, y_pred_best, labels=labels)
+        fig_cm = px.imshow(cm, x=labels, y=labels, text_auto=True, color_continuous_scale='Purples')
+        fig_cm = apply_plotly_theme(fig_cm)
+        st.plotly_chart(fig_cm, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.header("6️⃣ Classification Report")
+        report = classification_report(y_test, y_pred_best, target_names=labels, output_dict=True)
+        st.dataframe(pd.DataFrame(report).transpose().style.format("{:.4f}"), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.header("7️⃣ Top Important Features")
+        f_names = vectorizer.get_feature_names_out()
+        if best_name == "Multinomial Naive Bayes":
+            imp = np.max(best_model.feature_log_prob_, axis=0)
+        elif hasattr(best_model, 'coef_'):
+            imp = np.abs(best_model.coef_[0]) if best_model.coef_.shape[0] == 1 else np.max(np.abs(best_model.coef_), axis=0)
+        
+        top_idx = np.argsort(imp)[-20:]
+        imp_df = pd.DataFrame({'Word': f_names[top_idx], 'Importance': imp[top_idx]}).sort_values('Importance')
+        fig_imp = px.bar(imp_df, x="Importance", y="Word", orientation='h', color="Importance", color_continuous_scale="Plasma")
+        fig_imp = apply_plotly_theme(fig_imp)
+        st.plotly_chart(fig_imp, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.header("8️⃣ Save Model")
+        joblib.dump(best_model, "sentiment_model.pkl")
+        joblib.dump(vectorizer, "tfidf_vectorizer.pkl")
+        st.success("✅ `sentiment_model.pkl` & `tfidf_vectorizer.pkl` serialized and saved.")
+        st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.markdown('</div>', unsafe_allow_html=True)
