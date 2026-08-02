@@ -9,6 +9,9 @@ st.markdown("""
     <p style="color: #94A3B8; font-size: 1.1rem; line-height: 1.6;">
         Transform your unstructured product reviews into actionable business intelligence using cutting-edge natural language processing and machine learning.
     </p>
+    <p style="margin-top: 10px;">
+        <a href="https://reviewminer-ai-bqtrdcudzerpmdporwzmxt.streamlit.app/" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: bold; font-size: 1.1rem;">🌐 View Live App</a>
+    </p>
 </div>
 """, unsafe_allow_html=True)
 
