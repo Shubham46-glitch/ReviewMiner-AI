@@ -4,7 +4,7 @@ Welcome to **ReviewMiner AI**, an AI-powered text mining platform designed to tr
 
 ## 🚀 Live Demo
 
-**[Click here to view the deployed Streamlit App](YOUR_STREAMLIT_APP_LINK_HERE)**
+**[Click here to view the deployed Streamlit App]([YOUR_STREAMLIT_APP_LINK_HERE](https://reviewminer-ai-bqtrdcudzerpmdporwzmxt.streamlit.app/))**
 
 *(Note: Replace `YOUR_STREAMLIT_APP_LINK_HERE` with your actual Streamlit link once you copy it from Streamlit Community Cloud).*
 
