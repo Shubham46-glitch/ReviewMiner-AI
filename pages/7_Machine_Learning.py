@@ -14,18 +14,13 @@ from ui_utils import setup_page, custom_metric_card, apply_plotly_theme
 
 setup_page("Machine Learning Dashboard", "Train and evaluate sentiment classification models.", "🤖")
 
-@st.cache_data
-def load_data():
-    try:
-        df = pd.read_csv("product_reviews_cleaned.csv")
-        df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
-        df = df[df['Cleaned_Text'].str.strip() != ""] 
-        return df
-    except FileNotFoundError:
-        st.error("Dataset not found! Please run the preprocessing script.")
-        st.stop()
+import data_manager
 
-df = load_data()
+df = data_manager.get_cleaned_df().copy()
+df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
+df = df[df['Cleaned_Text'].str.strip() != ""].reset_index(drop=True)
+if 'Label' not in df.columns or df['Label'].nunique() == 0:
+    df['Label'] = 'Neutral'
 
 st.markdown('<div class="premium-card">', unsafe_allow_html=True)
 st.header("1️⃣ Data Preparation")
@@ -57,12 +52,24 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="premium-card">', unsafe_allow_html=True)
 st.header("3️⃣ Train Test Split")
-X_train, X_test, y_train, y_test = train_test_split(X_vec, y, test_size=0.2, random_state=42, stratify=y)
+
+# Stratify only if each class has at least 2 samples
+class_counts = y.value_counts()
+can_stratify = (y.nunique() > 1) and (class_counts.min() >= 2) and (len(y) >= 5)
+
+if can_stratify:
+    X_train, X_test, y_train, y_test = train_test_split(X_vec, y, test_size=0.2, random_state=42, stratify=y)
+elif len(y) >= 4:
+    X_train, X_test, y_train, y_test = train_test_split(X_vec, y, test_size=0.2, random_state=42)
+else:
+    # Very small custom uploaded dataset
+    X_train, X_test, y_train, y_test = X_vec, X_vec, y, y
+
 col_tt1, col_tt2 = st.columns(2)
 with col_tt1:
-    custom_metric_card("Training Set (80%)", X_train.shape[0], "Samples", icon="🏋️", color="#FACC15")
+    custom_metric_card("Training Set", X_train.shape[0], "Samples", icon="🏋️", color="#FACC15")
 with col_tt2:
-    custom_metric_card("Testing Set (20%)", X_test.shape[0], "Samples", icon="🧪", color="#EF4444")
+    custom_metric_card("Testing Set", X_test.shape[0], "Samples", icon="🧪", color="#EF4444")
 st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="premium-card">', unsafe_allow_html=True)

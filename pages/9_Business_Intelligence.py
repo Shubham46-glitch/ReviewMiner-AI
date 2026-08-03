@@ -13,20 +13,13 @@ from ui_utils import setup_page, custom_metric_card, apply_plotly_theme
 
 setup_page("Business Intelligence Dashboard", "Transform customer reviews into actionable business insights.", "📈")
 
-@st.cache_data
-def load_data():
-    try:
-        df = pd.read_csv("product_reviews_cleaned.csv")
-        df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
-        if 'Label' not in df.columns: df['Label'] = 'Neutral'
-        if 'Window' not in df.columns: df['Window'] = 'Unknown'
-        return df
-    except FileNotFoundError:
-        st.error("Dataset not found! Please run the preprocessing script.")
-        st.stop()
+import data_manager
 
-with st.spinner('Compiling Business Insights...'):
-    df = load_data()
+df = data_manager.get_cleaned_df()
+df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
+if 'Label' not in df.columns: df['Label'] = 'Neutral'
+if 'Window' not in df.columns: df['Window'] = 'Unknown'
+if 'Text' not in df.columns: df['Text'] = df.get('Cleaned_Text', '')
 
 st.sidebar.header("🎛️ Executive Filters")
 platforms = df['Window'].dropna().unique().tolist()
@@ -36,7 +29,9 @@ sentiments = df['Label'].dropna().unique().tolist()
 selected_sentiments = st.sidebar.multiselect("Select Sentiment", options=sentiments, default=sentiments)
 
 search_keyword = st.sidebar.text_input("Search Specific Keyword", "")
-review_count = st.sidebar.slider("Number of Reviews to Display (Table)", min_value=10, max_value=len(df), value=100)
+max_val = max(1, len(df))
+min_val = min(10, max_val)
+review_count = st.sidebar.slider("Number of Reviews to Display (Table)", min_value=min_val, max_value=max_val, value=min(100, max_val))
 
 filtered_df = df[df['Window'].isin(selected_platforms) & df['Label'].isin(selected_sentiments)]
 if search_keyword:

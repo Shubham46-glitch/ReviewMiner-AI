@@ -44,13 +44,11 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-@st.cache_data
+import data_manager
+
 def load_and_preprocess():
-    try:
-        df = pd.read_csv("product_reviews.csv")
-    except FileNotFoundError:
-        return None
-    if 'Text' in df.columns:
+    df = data_manager.get_current_df().copy()
+    if df is not None and not df.empty and 'Text' in df.columns:
         df['Cleaned_Text'] = df['Text'].apply(clean_text)
         return df
     return None
@@ -60,16 +58,19 @@ if st.button("🚀 Run Preprocessing Pipeline"):
         df_clean = load_and_preprocess()
         
     if df_clean is not None:
-        st.success("Preprocessing Complete! The data is now ready for Text Mining.")
+        st.success("Preprocessing Complete! The active dataset is clean and ready for Text Mining.")
+        
+        orig_words = df_clean['Text'].str.split().str.len().sum()
+        clean_tokens = df_clean['Cleaned_Text'].str.split().str.len().sum()
         
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
         st.subheader("Transformation Results")
         
         col1, col2 = st.columns(2)
         with col1:
-            custom_metric_card("Original Words", "Variable", "Raw messy text", icon="📝", color="#EF4444")
+            custom_metric_card("Original Words", f"{orig_words:,}", "Raw messy text", icon="📝", color="#EF4444")
         with col2:
-            custom_metric_card("Cleaned Tokens", "Optimized", "Ready for TF-IDF", icon="✨", color="#22C55E")
+            custom_metric_card("Cleaned Tokens", f"{clean_tokens:,}", "Optimized tokens", icon="✨", color="#22C55E")
             
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -77,10 +78,7 @@ if st.button("🚀 Run Preprocessing Pipeline"):
         st.subheader("Preview Preprocessed Data")
         st.dataframe(df_clean[['Text', 'Cleaned_Text']].head(20), use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Save happens in the background script typically, but we can do it here too if needed
-        # df_clean.to_csv("product_reviews_cleaned.csv", index=False)
     else:
-        st.error("Could not load or process 'product_reviews.csv'.")
+        st.error("No valid text column found in active dataset.")
 else:
-    st.info("Click the button above to execute the natural language processing pipeline.")
+    st.info("Click the button above to execute the natural language processing pipeline on the active dataset.")

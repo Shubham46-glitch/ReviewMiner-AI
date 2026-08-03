@@ -12,19 +12,19 @@ import time
 
 setup_page("Review Sentiment Prediction", "Enter a product review and let AI predict its sentiment.", "🔮")
 
-@st.cache_resource
+import data_manager
+
 def load_models():
     try:
         model = joblib.load("sentiment_model.pkl")
         vectorizer = joblib.load("tfidf_vectorizer.pkl")
         return model, vectorizer
-    except FileNotFoundError:
+    except Exception:
         return None, None
 
 model, vectorizer = load_models()
 if not model or not vectorizer:
-    st.error("Model or Vectorizer not found! Go to the Machine Learning Dashboard to train them.")
-    st.stop()
+    st.info("ℹ️ Custom or serialized ML model file not found yet. You can train models on the active dataset in the **Machine Learning** tab. Fallback rule-based AI sentiment analyzer will be used for predictions.")
 
 STOPWORDS = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now"])
 
@@ -61,11 +61,23 @@ if st.button("🔮 Predict Sentiment", type="primary"):
         with st.spinner("Analyzing text..."):
             time.sleep(0.5)
             cleaned_review = clean_text(user_review)
-            X_input = vectorizer.transform([cleaned_review])
-            prediction = model.predict(X_input)[0]
-            probabilities = model.predict_proba(X_input)[0]
-            classes = model.classes_
-            confidence = np.max(probabilities) * 100
+            if model and vectorizer:
+                X_input = vectorizer.transform([cleaned_review])
+                prediction = model.predict(X_input)[0]
+                probabilities = model.predict_proba(X_input)[0]
+                classes = model.classes_
+                confidence = np.max(probabilities) * 100
+            else:
+                prediction = data_manager.predict_vader_sentiment(cleaned_review)
+                classes = np.array(['Negative', 'Neutral', 'Positive'])
+                if prediction == 'Positive':
+                    probabilities = np.array([0.05, 0.15, 0.80])
+                elif prediction == 'Negative':
+                    probabilities = np.array([0.80, 0.15, 0.05])
+                else:
+                    probabilities = np.array([0.15, 0.70, 0.15])
+                confidence = np.max(probabilities) * 100
+                X_input = None
             
             color_map = {"Positive": "#00CC96", "Negative": "#EF553B", "Neutral": "#F3C01E"}
             emoji_map = {"Positive": "😊", "Negative": "😡", "Neutral": "😐"}
@@ -110,15 +122,18 @@ if st.button("🔮 Predict Sentiment", type="primary"):
                 st.plotly_chart(fig_bar, use_container_width=True)
                 
             st.subheader("How did the AI decide?")
-            feature_names = vectorizer.get_feature_names_out()
-            nonzero_indices = X_input.nonzero()[1]
-            if len(nonzero_indices) > 0:
-                words_used = [feature_names[idx] for idx in nonzero_indices]
-                keywords_html = " ".join([f"<span style='background: rgba(124, 58, 237, 0.2); padding: 5px 10px; border-radius: 15px; margin-right: 5px; display: inline-block; margin-bottom: 5px; border: 1px solid #7C3AED;'>{w}</span>" for w in words_used])
-                st.markdown(f"<p style='color: #94A3B8;'>The model successfully extracted {len(words_used)} important keywords from your review:</p>", unsafe_allow_html=True)
-                st.markdown(keywords_html, unsafe_allow_html=True)
+            if vectorizer and X_input is not None:
+                feature_names = vectorizer.get_feature_names_out()
+                nonzero_indices = X_input.nonzero()[1]
+                if len(nonzero_indices) > 0:
+                    words_used = [feature_names[idx] for idx in nonzero_indices]
+                    keywords_html = " ".join([f"<span style='background: rgba(124, 58, 237, 0.2); padding: 5px 10px; border-radius: 15px; margin-right: 5px; display: inline-block; margin-bottom: 5px; border: 1px solid #7C3AED;'>{w}</span>" for w in words_used])
+                    st.markdown(f"<p style='color: #94A3B8;'>The model successfully extracted {len(words_used)} important keywords from your review:</p>", unsafe_allow_html=True)
+                    st.markdown(keywords_html, unsafe_allow_html=True)
+                else:
+                    st.info("The review did not contain any significant keywords recognized by the model's vocabulary.")
             else:
-                st.info("The review did not contain any significant keywords recognized by the model's vocabulary.")
+                st.info("AI analyzed sentiment based on rule-based polarity lexicon features.")
 else:
     st.markdown('</div>', unsafe_allow_html=True)
 

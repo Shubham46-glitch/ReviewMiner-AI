@@ -5,15 +5,9 @@ from ui_utils import setup_page, custom_metric_card, apply_plotly_theme
 
 setup_page("Exploratory Data Analysis", "Analyze distributions, missing values, and dataset properties", "📊")
 
-@st.cache_data
-def load_data():
-    try:
-        return pd.read_csv("product_reviews.csv")
-    except FileNotFoundError:
-        st.error("Dataset not found!")
-        st.stop()
+import data_manager
 
-df = load_data()
+df = data_manager.get_current_df()
 
 st.markdown('<div class="premium-card">', unsafe_allow_html=True)
 st.subheader("Dataset Summary Metrics")

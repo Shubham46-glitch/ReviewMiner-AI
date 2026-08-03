@@ -8,16 +8,12 @@ from ui_utils import setup_page, apply_plotly_theme
 
 setup_page("Text Mining Dashboard", "Extract deep text analytics, themes, and keywords from reviews.", "☁️")
 
-@st.cache_data
-def load_data():
-    try:
-        return pd.read_csv("product_reviews_cleaned.csv")
-    except FileNotFoundError:
-        st.error("product_reviews_cleaned.csv not found! Please run the preprocessing script first.")
-        st.stop()
+import data_manager
 
-df = load_data()
+df = data_manager.get_cleaned_df()
 df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
+if 'Label' not in df.columns:
+    df['Label'] = 'Neutral'
 
 # Utility to generate word clouds
 def plot_wordcloud(text, title):

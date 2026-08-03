@@ -6,16 +6,9 @@ import time
 
 setup_page("Sentiment Analysis Dashboard", "Analyze customer sentiment distribution and business insights.", "😊")
 
-@st.cache_data
-def load_data():
-    try:
-        return pd.read_csv("product_reviews_cleaned.csv")
-    except FileNotFoundError:
-        st.error("product_reviews_cleaned.csv not found!")
-        st.stop()
+import data_manager
 
-with st.spinner('Loading sentiment data...'):
-    df = load_data()
+df = data_manager.get_cleaned_df()
 
 if 'Label' not in df.columns: df['Label'] = 'Neutral'
 if 'Window' not in df.columns: df['Window'] = 'Unknown'
@@ -28,7 +21,9 @@ selected_platforms = st.sidebar.multiselect("Select Platform", options=platforms
 sentiments = df['Label'].dropna().unique().tolist()
 selected_sentiments = st.sidebar.multiselect("Select Sentiment", options=sentiments, default=sentiments)
 search_keyword = st.sidebar.text_input("Search Keyword in Reviews", "")
-num_reviews = st.sidebar.slider("Number of Reviews in Table", min_value=10, max_value=len(df), value=100)
+max_val = max(1, len(df))
+min_val = min(10, max_val)
+num_reviews = st.sidebar.slider("Number of Reviews in Table", min_value=min_val, max_value=max_val, value=min(100, max_val))
 
 filtered_df = df[df['Window'].isin(selected_platforms) & df['Label'].isin(selected_sentiments)]
 if search_keyword:
