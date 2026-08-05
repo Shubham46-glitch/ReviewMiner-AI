@@ -10,7 +10,7 @@ df = data_manager.get_current_df()
 is_custom = data_manager.is_custom_data_active()
 ds_name = data_manager.get_dataset_name()
 
-tab1, tab2 = st.tabs(["📤 Custom Text Data Upload Center", "📊 Active Dataset Explorer"])
+tab1, tab2 = st.tabs(["📤 Custom Text Data Upload Center", "📊 Dataset Explorer"])
 
 with tab1:
     st.markdown("""
@@ -129,19 +129,12 @@ with tab1:
                     st.success(f"Successfully processed {len(lines)} pasted text records!")
                     st.rerun()
 
-    st.divider()
-    if is_custom:
-        if st.button("🔄 Reset Back to Default Product Reviews Dataset", use_container_width=True):
-            data_manager.reset_to_default_dataset()
-            st.success("Reset to default dataset.")
-            st.rerun()
-
 with tab2:
     st.markdown('<div class="premium-card">', unsafe_allow_html=True)
     if is_custom:
-        st.subheader(f"📁 Active Dataset: {ds_name} (Custom Uploaded)")
+        st.subheader(f"📁 Dataset Explorer: {ds_name}")
     else:
-        st.subheader(f"📦 Active Dataset: Default Product Reviews")
+        st.subheader("📦 Dataset Explorer")
     st.markdown('</div>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)

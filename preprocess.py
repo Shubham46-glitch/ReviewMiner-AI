@@ -34,7 +34,10 @@ def clean_text(text):
     
     # 4. Tokenize and remove stopwords
     if USE_NLTK:
-        words = word_tokenize(text)
+        try:
+            words = word_tokenize(text)
+        except Exception:
+            words = text.split()
     else:
         words = text.split()
         

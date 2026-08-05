@@ -345,29 +345,7 @@ def render_sidebar(active_kw=""):
         </div>
         """, unsafe_allow_html=True)
         
-        # Dataset Status Indicator Badge (Sleek & Compact)
-        is_custom = data_manager.is_custom_data_active()
-        ds_name = data_manager.get_dataset_name()
-        current_df = data_manager.get_current_df()
-        row_count = len(current_df) if current_df is not None else 0
-        
-        if is_custom:
-            st.markdown(f"""
-            <div style="background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px;">
-                <div style="color: #06B6D4; font-size: 0.65rem; font-weight: 700;">ACTIVE DATASET</div>
-                <div style="color: #FFFFFF; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📁 {ds_name} ({row_count:,})</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("🔄 Reset Default Data", use_container_width=True):
-                data_manager.reset_to_default_dataset()
-                st.rerun()
-        else:
-            st.markdown(f"""
-            <div style="background: rgba(124, 58, 237, 0.12); border: 1px solid rgba(124, 58, 237, 0.4); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px;">
-                <div style="color: #A78BFA; font-size: 0.65rem; font-weight: 700;">ACTIVE DATASET</div>
-                <div style="color: #FFFFFF; font-size: 0.85rem; font-weight: 600;">📦 Default Reviews ({row_count:,})</div>
-            </div>
-            """, unsafe_allow_html=True)
+
 
         st.page_link("app.py", label="Dashboard", icon="🏠")
         st.page_link("pages/2_Dataset.py", label="Dataset Upload & Info", icon="📂")

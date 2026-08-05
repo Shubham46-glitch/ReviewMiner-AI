@@ -8,6 +8,9 @@ setup_page("Exploratory Data Analysis", "Analyze distributions, missing values, 
 import data_manager
 
 df = data_manager.get_current_df()
+if df.empty:
+    st.warning("⚠️ No dataset uploaded yet. Please navigate to the **Dataset Upload & Info** page to upload your text data.")
+    st.stop()
 
 st.markdown('<div class="premium-card">', unsafe_allow_html=True)
 st.subheader("Dataset Summary Metrics")

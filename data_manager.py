@@ -15,57 +15,31 @@ except Exception:
     VADER_ANALYZER = None
     HAS_VADER = False
 
-DEFAULT_RAW_FILE = "product_reviews.csv"
-DEFAULT_CLEANED_FILE = "product_reviews_cleaned.csv"
-
 def init_session_state():
     if "is_custom_dataset" not in st.session_state:
         st.session_state["is_custom_dataset"] = False
     if "dataset_name" not in st.session_state:
-        st.session_state["dataset_name"] = "Default Product Reviews"
+        st.session_state["dataset_name"] = "No Dataset Loaded"
     if "raw_df" not in st.session_state:
         st.session_state["raw_df"] = None
     if "cleaned_df" not in st.session_state:
         st.session_state["cleaned_df"] = None
 
-def load_default_raw():
-    try:
-        df = pd.read_csv(DEFAULT_RAW_FILE)
-        return df
-    except FileNotFoundError:
-        return pd.DataFrame(columns=["Text", "Label", "Window"])
-
-def load_default_cleaned():
-    try:
-        df = pd.read_csv(DEFAULT_CLEANED_FILE)
-        df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
-        return df
-    except FileNotFoundError:
-        raw_df = load_default_raw()
-        if not raw_df.empty and 'Text' in raw_df.columns:
-            raw_df['Cleaned_Text'] = raw_df['Text'].apply(clean_text)
-            return raw_df
-        return pd.DataFrame(columns=["Text", "Label", "Window", "Cleaned_Text"])
-
 def get_current_df():
     init_session_state()
-    if st.session_state.is_custom_dataset and st.session_state.raw_df is not None:
+    if st.session_state.raw_df is not None:
         return st.session_state.raw_df
-    else:
-        df = load_default_raw()
-        return df
+    return pd.DataFrame(columns=["Text", "Label", "Window", "Cleaned_Text"])
 
 def get_cleaned_df():
     init_session_state()
-    if st.session_state.is_custom_dataset and st.session_state.cleaned_df is not None:
+    if st.session_state.cleaned_df is not None:
         return st.session_state.cleaned_df
-    else:
-        df = load_default_cleaned()
-        return df
+    return pd.DataFrame(columns=["Text", "Label", "Window", "Cleaned_Text"])
 
 def is_custom_data_active():
     init_session_state()
-    return st.session_state.is_custom_dataset
+    return st.session_state.raw_df is not None
 
 def get_dataset_name():
     init_session_state()
@@ -142,10 +116,12 @@ def process_and_set_custom_df(raw_df, text_col, label_col=None, platform_col=Non
 
     if label_col and label_col in df.columns:
         def map_label(val):
+            if pd.isna(val) or val is None:
+                return 'Neutral'
             val_str = str(val).strip()
-            if val_str.lower() in ['positive', 'pos', '1', '5', '4', 'high', 'good']:
+            if val_str.lower() in ['positive', 'pos', '5', '4', 'high', 'good']:
                 return 'Positive'
-            elif val_str.lower() in ['negative', 'neg', '0', '-1', '1', '2', 'low', 'bad']:
+            elif val_str.lower() in ['negative', 'neg', '0', '-1', '2', 'low', 'bad']:
                 return 'Negative'
             elif val_str.lower() in ['neutral', 'neu', '3', 'medium']:
                 return 'Neutral'
@@ -173,6 +149,7 @@ def process_and_set_custom_df(raw_df, text_col, label_col=None, platform_col=Non
         df['Window'] = "Uploaded Data"
 
     df['Cleaned_Text'] = df['Text'].apply(clean_text)
+    df['Cleaned_Text'] = df.apply(lambda r: r['Cleaned_Text'] if r['Cleaned_Text'].strip() != "" else r['Text'].lower(), axis=1)
     df = df[df['Text'].str.strip() != ""].reset_index(drop=True)
 
     st.session_state.raw_df = df
@@ -184,6 +161,6 @@ def process_and_set_custom_df(raw_df, text_col, label_col=None, platform_col=Non
 def reset_to_default_dataset():
     init_session_state()
     st.session_state.is_custom_dataset = False
-    st.session_state.dataset_name = "Default Product Reviews"
+    st.session_state.dataset_name = "No Dataset Loaded"
     st.session_state.raw_df = None
     st.session_state.cleaned_df = None

@@ -9,6 +9,9 @@ setup_page("Sentiment Analysis Dashboard", "Analyze customer sentiment distribut
 import data_manager
 
 df = data_manager.get_cleaned_df()
+if df.empty:
+    st.warning("⚠️ No dataset uploaded yet. Please navigate to the **Dataset Upload & Info** page to upload your text data.")
+    st.stop()
 
 if 'Label' not in df.columns: df['Label'] = 'Neutral'
 if 'Window' not in df.columns: df['Window'] = 'Unknown'

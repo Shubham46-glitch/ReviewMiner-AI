@@ -26,13 +26,13 @@ col_banner1, col_banner2 = st.columns([3, 1])
 with col_banner1:
     if is_custom:
         st.markdown(f"""
-        <h3 style="color: #06B6D4; margin: 0;">📁 Currently Active Dataset: {ds_name}</h3>
+        <h3 style="color: #06B6D4; margin: 0;">📁 Uploaded Dataset: {ds_name}</h3>
         <p style="color: #94A3B8; margin-top: 5px;">Loaded <b>{len(curr_df):,}</b> custom text records. All text mining modules are operating on your uploaded data.</p>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
-        <h3 style="color: #7C3AED; margin: 0;">📦 Currently Active Dataset: Default Product Reviews</h3>
-        <p style="color: #94A3B8; margin-top: 5px;">Loaded <b>{len(curr_df):,}</b> product reviews. Upload your custom CSV, TXT, or text dataset anytime to run text mining on your own data!</p>
+        <h3 style="color: #7C3AED; margin: 0;">📤 Upload Text Dataset</h3>
+        <p style="color: #94A3B8; margin-top: 5px;">Upload your custom CSV, TXT, or Excel dataset to run text mining and machine learning on your own data!</p>
         """, unsafe_allow_html=True)
 with col_banner2:
     if st.button("📤 Upload Text Data", use_container_width=True, type="primary"):

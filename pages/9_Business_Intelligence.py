@@ -16,6 +16,9 @@ setup_page("Business Intelligence Dashboard", "Transform customer reviews into a
 import data_manager
 
 df = data_manager.get_cleaned_df()
+if df.empty:
+    st.warning("⚠️ No dataset uploaded yet. Please navigate to the **Dataset Upload & Info** page to upload your text data.")
+    st.stop()
 df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
 if 'Label' not in df.columns: df['Label'] = 'Neutral'
 if 'Window' not in df.columns: df['Window'] = 'Unknown'
@@ -148,11 +151,23 @@ st.divider()
 
 def get_top_words(corpus, n=20):
     if not corpus.empty and corpus.str.strip().any():
-        vec = CountVectorizer(stop_words='english').fit(corpus)
-        bag = vec.transform(corpus)
-        sum_words = bag.sum(axis=0)
-        words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
-        return pd.DataFrame(sorted(words_freq, key=lambda x: x[1], reverse=True)[:n], columns=['Word', 'Freq'])
+        try:
+            vec = CountVectorizer(stop_words='english').fit(corpus)
+            bag = vec.transform(corpus)
+            sum_words = bag.sum(axis=0)
+            words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
+            return pd.DataFrame(sorted(words_freq, key=lambda x: x[1], reverse=True)[:n], columns=['Word', 'Freq'])
+        except ValueError:
+            try:
+                vec = CountVectorizer().fit(corpus)
+                bag = vec.transform(corpus)
+                sum_words = bag.sum(axis=0)
+                words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
+                return pd.DataFrame(sorted(words_freq, key=lambda x: x[1], reverse=True)[:n], columns=['Word', 'Freq'])
+            except Exception:
+                return pd.DataFrame(columns=['Word', 'Freq'])
+        except Exception:
+            return pd.DataFrame(columns=['Word', 'Freq'])
     return pd.DataFrame(columns=['Word', 'Freq'])
 
 st.header("🔑 Keyword Intelligence")
@@ -170,6 +185,8 @@ with col_k1:
         fig_pos_kw = apply_plotly_theme(fig_pos_kw)
         fig_pos_kw.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=400)
         st.plotly_chart(fig_pos_kw, use_container_width=True)
+    else:
+        st.info("No positive keywords found.")
     st.markdown('</div>', unsafe_allow_html=True)
 with col_k2:
     st.markdown('<div class="premium-card">', unsafe_allow_html=True)
@@ -179,6 +196,8 @@ with col_k2:
         fig_neg_kw = apply_plotly_theme(fig_neg_kw)
         fig_neg_kw.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=400)
         st.plotly_chart(fig_neg_kw, use_container_width=True)
+    else:
+        st.info("No negative keywords found.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
@@ -186,30 +205,41 @@ st.divider()
 st.header("☁️ Visual Sentiment Landscapes")
 col_w1, col_w2, col_w3 = st.columns(3)
 def generate_wc(text, colormap):
-    wc = WordCloud(width=400, height=300, background_color='#111827', colormap=colormap).generate(text)
-    fig, ax = plt.subplots(facecolor='#111827')
-    ax.imshow(wc, interpolation='bilinear')
-    ax.axis('off')
-    fig.patch.set_facecolor('#111827')
-    return fig
+    if not isinstance(text, str) or not text.strip():
+        return None
+    try:
+        wc = WordCloud(width=400, height=300, background_color='#111827', colormap=colormap).generate(text)
+        fig, ax = plt.subplots(facecolor='#111827')
+        ax.imshow(wc, interpolation='bilinear')
+        ax.axis('off')
+        fig.patch.set_facecolor('#111827')
+        return fig
+    except Exception:
+        return None
 
 with col_w1:
     st.markdown('<div class="premium-card">', unsafe_allow_html=True)
     st.subheader("Overall Word Cloud")
     all_text = " ".join(filtered_df['Cleaned_Text'])
-    if all_text.strip(): st.pyplot(generate_wc(all_text, 'viridis'))
+    fig_wc1 = generate_wc(all_text, 'viridis')
+    if fig_wc1: st.pyplot(fig_wc1)
+    else: st.info("No text data for word cloud.")
     st.markdown('</div>', unsafe_allow_html=True)
 with col_w2:
     st.markdown('<div class="premium-card">', unsafe_allow_html=True)
     st.subheader("Positive Word Cloud")
     pos_t = " ".join(pos_corpus)
-    if pos_t.strip(): st.pyplot(generate_wc(pos_t, 'Greens'))
+    fig_wc2 = generate_wc(pos_t, 'Greens')
+    if fig_wc2: st.pyplot(fig_wc2)
+    else: st.info("No positive text for word cloud.")
     st.markdown('</div>', unsafe_allow_html=True)
 with col_w3:
     st.markdown('<div class="premium-card">', unsafe_allow_html=True)
     st.subheader("Negative Word Cloud")
     neg_t = " ".join(neg_corpus)
-    if neg_t.strip(): st.pyplot(generate_wc(neg_t, 'Reds'))
+    fig_wc3 = generate_wc(neg_t, 'Reds')
+    if fig_wc3: st.pyplot(fig_wc3)
+    else: st.info("No negative text for word cloud.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()

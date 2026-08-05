@@ -17,6 +17,9 @@ setup_page("Machine Learning Dashboard", "Train and evaluate sentiment classific
 import data_manager
 
 df = data_manager.get_cleaned_df().copy()
+if df.empty:
+    st.warning("⚠️ No dataset uploaded yet. Please navigate to the **Dataset Upload & Info** page to upload your text data.")
+    st.stop()
 df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
 df = df[df['Cleaned_Text'].str.strip() != ""].reset_index(drop=True)
 if 'Label' not in df.columns or df['Label'].nunique() == 0:
@@ -33,13 +36,30 @@ with col3:
     custom_metric_card("Missing Values", df.isnull().sum().sum(), "NaT/NaN", icon="✅", color="#22C55E")
 st.markdown('</div>', unsafe_allow_html=True)
 
+if len(df) < 2:
+    st.warning("⚠️ Machine Learning requires at least 2 text samples. Please upload a larger dataset.")
+    st.stop()
+
+if df['Label'].nunique() < 2:
+    st.warning(f"⚠️ Machine Learning requires at least 2 distinct sentiment classes (e.g. Positive and Negative). Your dataset currently contains only 1 class ('{df['Label'].iloc[0]}'). Please map sentiment labels in the Dataset tab or auto-generate labels using VADER.")
+    st.stop()
+
 st.markdown('<div class="premium-card">', unsafe_allow_html=True)
 st.header("2️⃣ Feature Extraction (TF-IDF)")
 X = df['Cleaned_Text']
 y = df['Label']
 
-vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
-X_vec = vectorizer.fit_transform(X)
+try:
+    vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
+    X_vec = vectorizer.fit_transform(X)
+except ValueError:
+    try:
+        vectorizer = TfidfVectorizer(max_features=5000)
+        X_vec = vectorizer.fit_transform(X)
+    except Exception as e:
+        st.error(f"Error during feature extraction: {str(e)}")
+        st.stop()
+
 vocab_size = len(vectorizer.vocabulary_)
 matrix_shape = X_vec.shape
 
@@ -87,19 +107,27 @@ if st.button("🚀 Train Models Now", type="primary"):
         results = []
         trained_models = {}
         for name, model in models.items():
-            start = time.time()
-            model.fit(X_train, y_train)
-            train_t = time.time() - start
-            y_pred = model.predict(X_test)
-            acc = accuracy_score(y_test, y_pred)
-            prec = precision_score(y_test, y_pred, average='weighted', zero_division=0)
-            rec = recall_score(y_test, y_pred, average='weighted', zero_division=0)
-            f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
-            trained_models[name] = model
-            results.append({
-                "Algorithm": name, "Accuracy": acc, "Precision": prec, "Recall": rec, "F1 Score": f1, "Train Time (s)": round(train_t, 4)
-            })
+            try:
+                start = time.time()
+                model.fit(X_train, y_train)
+                train_t = time.time() - start
+                y_pred = model.predict(X_test)
+                acc = accuracy_score(y_test, y_pred)
+                prec = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+                rec = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+                f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+                trained_models[name] = model
+                results.append({
+                    "Algorithm": name, "Accuracy": acc, "Precision": prec, "Recall": rec, "F1 Score": f1, "Train Time (s)": round(train_t, 4)
+                })
+            except Exception as err:
+                st.warning(f"Could not train {name}: {str(err)}")
             
+        if not results:
+            st.error("Failed to train models on the current dataset.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.stop()
+
         results_df = pd.DataFrame(results)
         best_idx = results_df['F1 Score'].idxmax()
         best_name = results_df.loc[best_idx, 'Algorithm']
@@ -112,40 +140,61 @@ if st.button("🚀 Train Models Now", type="primary"):
         
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
         st.header("5️⃣ Confusion Matrix")
-        y_pred_best = best_model.predict(X_test)
-        labels = sorted(y.unique().tolist())
-        cm = confusion_matrix(y_test, y_pred_best, labels=labels)
-        fig_cm = px.imshow(cm, x=labels, y=labels, text_auto=True, color_continuous_scale='Purples')
-        fig_cm = apply_plotly_theme(fig_cm)
-        st.plotly_chart(fig_cm, use_container_width=True)
+        try:
+            y_pred_best = best_model.predict(X_test)
+            labels = sorted(y.unique().tolist())
+            cm = confusion_matrix(y_test, y_pred_best, labels=labels)
+            fig_cm = px.imshow(cm, x=labels, y=labels, text_auto=True, color_continuous_scale='Purples')
+            fig_cm = apply_plotly_theme(fig_cm)
+            st.plotly_chart(fig_cm, use_container_width=True)
+        except Exception as e:
+            st.info(f"Confusion Matrix unavailable: {str(e)}")
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
         st.header("6️⃣ Classification Report")
-        report = classification_report(y_test, y_pred_best, target_names=labels, output_dict=True)
-        st.dataframe(pd.DataFrame(report).transpose().style.format("{:.4f}"), use_container_width=True)
+        try:
+            report = classification_report(y_test, y_pred_best, target_names=labels, output_dict=True)
+            st.dataframe(pd.DataFrame(report).transpose().style.format("{:.4f}"), use_container_width=True)
+        except Exception as e:
+            st.info(f"Classification report unavailable: {str(e)}")
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
         st.header("7️⃣ Top Important Features")
-        f_names = vectorizer.get_feature_names_out()
-        if best_name == "Multinomial Naive Bayes":
-            imp = np.max(best_model.feature_log_prob_, axis=0)
-        elif hasattr(best_model, 'coef_'):
-            imp = np.abs(best_model.coef_[0]) if best_model.coef_.shape[0] == 1 else np.max(np.abs(best_model.coef_), axis=0)
-        
-        top_idx = np.argsort(imp)[-20:]
-        imp_df = pd.DataFrame({'Word': f_names[top_idx], 'Importance': imp[top_idx]}).sort_values('Importance')
-        fig_imp = px.bar(imp_df, x="Importance", y="Word", orientation='h', color="Importance", color_continuous_scale="Plasma")
-        fig_imp = apply_plotly_theme(fig_imp)
-        st.plotly_chart(fig_imp, use_container_width=True)
+        try:
+            f_names = vectorizer.get_feature_names_out()
+            imp = None
+            if best_name == "Multinomial Naive Bayes" and hasattr(best_model, 'feature_log_prob_'):
+                imp = np.max(best_model.feature_log_prob_, axis=0)
+            elif hasattr(best_model, 'coef_'):
+                coef = best_model.coef_
+                if coef.ndim == 1 or coef.shape[0] == 1:
+                    imp = np.abs(coef.ravel())
+                else:
+                    imp = np.max(np.abs(coef), axis=0)
+            
+            if imp is not None and len(imp) > 0:
+                n_feat = min(20, len(imp))
+                top_idx = np.argsort(imp)[-n_feat:]
+                imp_df = pd.DataFrame({'Word': f_names[top_idx], 'Importance': imp[top_idx]}).sort_values('Importance')
+                fig_imp = px.bar(imp_df, x="Importance", y="Word", orientation='h', color="Importance", color_continuous_scale="Plasma")
+                fig_imp = apply_plotly_theme(fig_imp)
+                st.plotly_chart(fig_imp, use_container_width=True)
+            else:
+                st.info("Feature importance not available for this model.")
+        except Exception as e:
+            st.info("Top feature importance chart unavailable.")
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
         st.header("8️⃣ Save Model")
-        joblib.dump(best_model, "sentiment_model.pkl")
-        joblib.dump(vectorizer, "tfidf_vectorizer.pkl")
-        st.success("✅ `sentiment_model.pkl` & `tfidf_vectorizer.pkl` serialized and saved.")
+        try:
+            joblib.dump(best_model, "sentiment_model.pkl")
+            joblib.dump(vectorizer, "tfidf_vectorizer.pkl")
+            st.success("✅ `sentiment_model.pkl` & `tfidf_vectorizer.pkl` serialized and saved.")
+        except Exception as e:
+            st.warning(f"Could not save model files: {str(e)}")
         st.markdown('</div>', unsafe_allow_html=True)
 else:
     st.markdown('</div>', unsafe_allow_html=True)
