@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-import io
+import plotly.express as px
 import data_manager
-from ui_utils import setup_page, custom_metric_card
+from ui_utils import setup_page, custom_metric_card, apply_plotly_theme
 
 setup_page("Dataset Upload & Overview", "Upload your custom text data or explore the active dataset", "📂")
 
@@ -17,23 +17,19 @@ with tab1:
     <div class="premium-card">
         <h3 style="color: #7C3AED;">Upload Custom Text Data</h3>
         <p style="color: #94A3B8;">
-            Upload your own customer reviews, feedback comments, or plain text documents. All text mining modules (EDA, Word Clouds, Sentiment Analysis, Machine Learning, and Reports) will dynamically execute on your uploaded dataset!
+            Upload your customer reviews, feedback comments, job descriptions, or plain text documents. All text mining modules (EDA, Word Clouds, Sentiment Analysis, Machine Learning, and Reports) will dynamically analyze your data!
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    upload_mode = st.radio("Choose Input Method", ["CSV / Excel File Upload", "Plain Text File (.txt)", "Direct Raw Text Entry"], horizontal=True)
+    upload_mode = st.radio("Choose Input Method", ["CSV / Excel / TSV File Upload", "Plain Text File (.txt)", "Direct Raw Text Entry"], horizontal=True)
 
-    if upload_mode == "CSV / Excel File Upload":
-        uploaded_file = st.file_uploader("Upload CSV or Excel file containing text data", type=["csv", "xlsx", "xls"])
+    if upload_mode == "CSV / Excel / TSV File Upload":
+        uploaded_file = st.file_uploader("Upload CSV, Excel, or TSV file containing text data", type=["csv", "xlsx", "xls", "tsv"])
         
         if uploaded_file is not None:
             try:
-                if uploaded_file.name.endswith('.csv'):
-                    temp_df = pd.read_csv(uploaded_file)
-                else:
-                    temp_df = pd.read_excel(uploaded_file)
-                    
+                temp_df = data_manager.read_file_with_encodings(uploaded_file)
                 st.success(f"File loaded successfully! Found **{temp_df.shape[0]:,}** rows and **{temp_df.shape[1]}** columns.")
                 
                 st.markdown("#### Map Dataset Columns")
@@ -52,7 +48,7 @@ with tab1:
                     selected_label_col = st.selectbox("Select Sentiment Label Column", options=label_options, index=label_idx)
                     
                 with col_m3:
-                    plat_options = ["[None / Default Platform]"] + all_cols
+                    plat_options = ["[None / Default Category]"] + all_cols
                     plat_idx = plat_options.index(auto_plat) if auto_plat in plat_options else 0
                     selected_plat_col = st.selectbox("Select Platform / Category Column", options=plat_options, index=plat_idx)
                 
@@ -72,7 +68,8 @@ with tab1:
                             dataset_name=uploaded_file.name,
                             auto_label_missing=True
                         )
-                        st.success(f"Custom Dataset '{uploaded_file.name}' is now active across all text mining modules!")
+                        st.session_state['just_uploaded'] = True
+                        st.success(f"Custom Dataset '{uploaded_file.name}' processed successfully!")
                         st.rerun()
             except Exception as e:
                 st.error(f"Error reading uploaded file: {str(e)}")
@@ -103,6 +100,7 @@ with tab1:
                         dataset_name=uploaded_txt.name,
                         auto_label_missing=True
                     )
+                    st.session_state['just_uploaded'] = True
                     st.success("Text file processed and set as active dataset!")
                     st.rerun()
 
@@ -126,30 +124,96 @@ with tab1:
                         dataset_name="Direct Text Input",
                         auto_label_missing=True
                     )
+                    st.session_state['just_uploaded'] = True
                     st.success(f"Successfully processed {len(lines)} pasted text records!")
                     st.rerun()
 
+    # --- INSTANT ANALYTICS & INSIGHTS DISPLAY AFTER UPLOAD ---
+    if is_custom and not df.empty:
+        st.divider()
+        st.markdown(f"""
+        <div class="premium-card" style="border-left: 5px solid #06B6D4;">
+            <h3 style="color: #06B6D4;">⚡ Instant Analysis Results: {ds_name}</h3>
+            <p style="color: #94A3B8;">Dataset processed cleanly! Below is an immediate analytical summary of your uploaded data.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        pos_cnt = len(df[df['Label'] == 'Positive']) if 'Label' in df.columns else 0
+        neu_cnt = len(df[df['Label'] == 'Neutral']) if 'Label' in df.columns else 0
+        neg_cnt = len(df[df['Label'] == 'Negative']) if 'Label' in df.columns else 0
+        total_rec = len(df)
+        pos_pct = (pos_cnt / total_rec * 100) if total_rec > 0 else 0
+        
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        with col_m1:
+            custom_metric_card("Total Records", f"{total_rec:,}", "Processed text rows", icon="📄")
+        with col_m2:
+            custom_metric_card("Positive Share", f"{pos_pct:.1f}%", f"{pos_cnt:,} positive", icon="😊", color="#22C55E")
+        with col_m3:
+            custom_metric_card("Negative Share", f"{(neg_cnt/total_rec*100):.1f}%", f"{neg_cnt:,} negative", icon="😡", color="#EF4444")
+        with col_m4:
+            custom_metric_card("Neutral Share", f"{(neu_cnt/total_rec*100):.1f}%", f"{neu_cnt:,} neutral", icon="😐", color="#FACC15")
+
+        if 'Label' in df.columns:
+            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+            st.subheader("📊 Sentiment Analysis Results")
+            col_chart1, col_chart2 = st.columns(2)
+            sentiment_counts = df['Label'].value_counts().reset_index()
+            sentiment_counts.columns = ['Sentiment', 'Count']
+            color_map = {"Positive": "#22C55E", "Neutral": "#FACC15", "Negative": "#EF4444"}
+            
+            with col_chart1:
+                fig_pie = px.pie(sentiment_counts, names='Sentiment', values='Count', color='Sentiment', color_discrete_map=color_map, hole=0.4, title="Sentiment Share")
+                fig_pie = apply_plotly_theme(fig_pie)
+                st.plotly_chart(fig_pie, use_container_width=True)
+            with col_chart2:
+                fig_bar = px.bar(sentiment_counts, x='Sentiment', y='Count', color='Sentiment', color_discrete_map=color_map, text_auto=True, title="Sentiment Counts")
+                fig_bar = apply_plotly_theme(fig_bar)
+                st.plotly_chart(fig_bar, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.subheader("🚀 Jump to Modules")
+        st.markdown("<p style='color: #94A3B8;'>Choose a module to explore deeper insights on your uploaded data:</p>", unsafe_allow_html=True)
+        btn_c1, btn_c2, btn_c3, btn_c4 = st.columns(4)
+        with btn_c1:
+            if st.button("📊 Exploratory Data (EDA)", use_container_width=True):
+                st.switch_page("pages/3_EDA.py")
+        with btn_c2:
+            if st.button("☁️ Text Mining", use_container_width=True):
+                st.switch_page("pages/5_Text_Mining.py")
+        with btn_c3:
+            if st.button("🤖 Machine Learning", use_container_width=True):
+                st.switch_page("pages/7_Machine_Learning.py")
+        with btn_c4:
+            if st.button("📈 Business Intelligence", use_container_width=True):
+                st.switch_page("pages/9_Business_Intelligence.py")
+        st.markdown('</div>', unsafe_allow_html=True)
+
 with tab2:
     st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    if is_custom:
+    if is_custom and not df.empty:
         st.subheader(f"📁 Dataset Explorer: {ds_name}")
     else:
         st.subheader("📦 Dataset Explorer")
     st.markdown('</div>', unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        custom_metric_card("Total Rows", f"{df.shape[0]:,}", "Text records loaded", icon="📄")
-    with col2:
-        custom_metric_card("Total Columns", f"{df.shape[1]}", "Data attributes available", icon="🗂️", color="#06B6D4")
-    with col3:
-        custom_metric_card("Missing Values", f"{df.isnull().sum().sum()}", "Incomplete cells", icon="⚠️", color="#EF4444")
+    if not df.empty:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            custom_metric_card("Total Rows", f"{df.shape[0]:,}", "Text records loaded", icon="📄")
+        with col2:
+            custom_metric_card("Total Columns", f"{df.shape[1]}", "Data attributes available", icon="🗂️", color="#06B6D4")
+        with col3:
+            custom_metric_card("Missing Values", f"{df.isnull().sum().sum()}", "Incomplete cells", icon="⚠️", color="#EF4444")
 
-    st.markdown("""
-    <div class="premium-card">
-        <h3>🔍 Interactive Data Explorer</h3>
-        <p style="color: #94A3B8; margin-bottom: 20px;">Search, sort, and filter the active dataset currently feeding the Text Mining pipeline.</p>
-    """, unsafe_allow_html=True)
+        st.markdown("""
+        <div class="premium-card">
+            <h3>🔍 Interactive Data Explorer</h3>
+            <p style="color: #94A3B8; margin-bottom: 20px;">Search, sort, and filter the processed dataset feeding the Text Mining pipeline.</p>
+        """, unsafe_allow_html=True)
 
-    st.dataframe(df, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.dataframe(df, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.info("No dataset uploaded yet. Please upload a dataset in the 'Upload Custom Text Data' tab above.")

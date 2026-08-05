@@ -45,35 +45,54 @@ def get_dataset_name():
     init_session_state()
     return st.session_state.dataset_name
 
+def read_file_with_encodings(uploaded_file):
+    name = uploaded_file.name.lower()
+    if name.endswith('.xlsx') or name.endswith('.xls'):
+        return pd.read_excel(uploaded_file)
+    
+    encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1', 'utf-16']
+    for enc in encodings:
+        try:
+            uploaded_file.seek(0)
+            sep = '\t' if name.endswith('.tsv') else ','
+            df = pd.read_csv(uploaded_file, encoding=enc, sep=sep)
+            return df
+        except Exception:
+            continue
+            
+    uploaded_file.seek(0)
+    return pd.read_csv(uploaded_file, on_bad_lines='skip')
+
 def auto_detect_columns(df):
     cols = df.columns.tolist()
     text_col = None
     label_col = None
     platform_col = None
 
-    # Text column candidates
-    text_candidates = ['text', 'review', 'reviews', 'comment', 'comments', 'feedback', 'description', 'message', 'content']
+    text_candidates = ['text', 'review', 'reviews', 'comment', 'comments', 'feedback', 'description', 'message', 'content', 'body', 'job_description', 'title', 'summary', 'tweet', 'tweets', 'statement', 'opinion', 'post', 'posts', 'input']
     for col in cols:
         if col.lower() in text_candidates:
             text_col = col
             break
+            
     if not text_col:
+        max_avg_len = -1
         for col in cols:
-            if df[col].dtype == 'object':
-                text_col = col
-                break
+            if df[col].dtype == 'object' or str(df[col].dtype) == 'string':
+                avg_len = df[col].astype(str).str.len().mean()
+                if avg_len > max_avg_len:
+                    max_avg_len = avg_len
+                    text_col = col
         if not text_col and len(cols) > 0:
             text_col = cols[0]
 
-    # Label candidates
-    label_candidates = ['label', 'sentiment', 'rating', 'score', 'stars', 'category', 'target']
+    label_candidates = ['label', 'sentiment', 'rating', 'score', 'stars', 'category', 'target', 'class', 'type', 'polarity']
     for col in cols:
         if col != text_col and col.lower() in label_candidates:
             label_col = col
             break
 
-    # Platform/Source candidates
-    platform_candidates = ['window', 'platform', 'source', 'channel', 'device', 'app', 'store']
+    platform_candidates = ['window', 'platform', 'source', 'channel', 'device', 'app', 'store', 'company', 'location', 'source_name']
     for col in cols:
         if col not in [text_col, label_col] and col.lower() in platform_candidates:
             platform_col = col
