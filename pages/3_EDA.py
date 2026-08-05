@@ -37,25 +37,7 @@ with col_info2:
     st.dataframe(missing_df, use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-if 'Label' in df.columns:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    st.subheader("Sentiment Distribution")
-    col_plot1, col_plot2 = st.columns(2)
-    
-    sentiment_counts = df['Label'].value_counts().reset_index()
-    sentiment_counts.columns = ['Sentiment', 'Count']
-    color_map = {"Positive": "#22C55E", "Neutral": "#FACC15", "Negative": "#EF4444"}
-    
-    with col_plot1:
-        fig_pie = px.pie(sentiment_counts, names='Sentiment', values='Count', color='Sentiment', color_discrete_map=color_map, title="Sentiment Share")
-        fig_pie = apply_plotly_theme(fig_pie)
-        st.plotly_chart(fig_pie, use_container_width=True)
-        
-    with col_plot2:
-        fig_bar = px.bar(sentiment_counts, x='Sentiment', y='Count', color='Sentiment', color_discrete_map=color_map, text_auto=True, title="Sentiment Counts")
-        fig_bar = apply_plotly_theme(fig_bar)
-        st.plotly_chart(fig_bar, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+
 
 if 'Window' in df.columns:
     st.markdown('<div class="premium-card">', unsafe_allow_html=True)

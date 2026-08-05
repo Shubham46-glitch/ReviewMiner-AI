@@ -150,39 +150,19 @@ with tab1:
         </div>
         """, unsafe_allow_html=True)
         
-        pos_cnt = len(df[df['Label'] == 'Positive']) if 'Label' in df.columns else 0
-        neu_cnt = len(df[df['Label'] == 'Neutral']) if 'Label' in df.columns else 0
-        neg_cnt = len(df[df['Label'] == 'Negative']) if 'Label' in df.columns else 0
         total_rec = len(df)
-        pos_pct = (pos_cnt / total_rec * 100) if total_rec > 0 else 0
+        total_cols = len(df.columns)
+        missing_cnt = df.isnull().sum().sum()
         
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
         with col_m1:
             custom_metric_card("Total Records", f"{total_rec:,}", "Processed text rows", icon="📄")
         with col_m2:
-            custom_metric_card("Positive Share", f"{pos_pct:.1f}%", f"{pos_cnt:,} positive", icon="😊", color="#22C55E")
+            custom_metric_card("Total Attributes", f"{total_cols}", "Dataset columns", icon="📐", color="#06B6D4")
         with col_m3:
-            custom_metric_card("Negative Share", f"{(neg_cnt/total_rec*100):.1f}%", f"{neg_cnt:,} negative", icon="😡", color="#EF4444")
+            custom_metric_card("Missing Values", f"{missing_cnt}", "Cells requiring info", icon="⚠️", color="#FACC15")
         with col_m4:
-            custom_metric_card("Neutral Share", f"{(neu_cnt/total_rec*100):.1f}%", f"{neu_cnt:,} neutral", icon="😐", color="#FACC15")
-
-        if 'Label' in df.columns:
-            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-            st.subheader("📊 Sentiment Analysis Results")
-            col_chart1, col_chart2 = st.columns(2)
-            sentiment_counts = df['Label'].value_counts().reset_index()
-            sentiment_counts.columns = ['Sentiment', 'Count']
-            color_map = {"Positive": "#22C55E", "Neutral": "#FACC15", "Negative": "#EF4444"}
-            
-            with col_chart1:
-                fig_pie = px.pie(sentiment_counts, names='Sentiment', values='Count', color='Sentiment', color_discrete_map=color_map, hole=0.4, title="Sentiment Share")
-                fig_pie = apply_plotly_theme(fig_pie)
-                st.plotly_chart(fig_pie, use_container_width=True)
-            with col_chart2:
-                fig_bar = px.bar(sentiment_counts, x='Sentiment', y='Count', color='Sentiment', color_discrete_map=color_map, text_auto=True, title="Sentiment Counts")
-                fig_bar = apply_plotly_theme(fig_bar)
-                st.plotly_chart(fig_bar, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            custom_metric_card("Duplicates", f"{df.duplicated().sum()}", "Redundant rows", icon="👯", color="#EF4444")
 
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
         st.subheader("🚀 Jump to Modules")

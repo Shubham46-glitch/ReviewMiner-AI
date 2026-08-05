@@ -108,6 +108,15 @@ def auto_detect_columns(df: pd.DataFrame):
 def predict_vader_sentiment(text: str) -> str:
     if not isinstance(text, str) or not text.strip():
         return "Neutral"
+        
+    text_lower = text.lower()
+    negation_phrases = ["not good", "not great", "not working", "not worth", "not happy", "not recommend", "not recommended", "not bad", "not useful", "not nice", "not fast", "is not good", "was not good", "not good at all", "not satisfied"]
+    for phrase in negation_phrases:
+        if phrase in text_lower:
+            if phrase == "not bad":
+                return "Positive"
+            return "Negative"
+
     if HAS_NLTK and VADER:
         try:
             compound = VADER.polarity_scores(text)['compound']
@@ -125,6 +134,9 @@ def predict_vader_sentiment(text: str) -> str:
     words = set(re.findall(r'\w+', text.lower()))
     p_cnt = len(words.intersection(pos_words))
     n_cnt = len(words.intersection(neg_words))
+    if any(neg in text_lower for neg in ["not", "no", "never", "n't"]):
+        if p_cnt > 0 and n_cnt == 0:
+            return "Negative"
     if p_cnt > n_cnt:
         return "Positive"
     elif n_cnt > p_cnt:

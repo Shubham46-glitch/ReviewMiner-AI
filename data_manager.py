@@ -311,6 +311,15 @@ def extract_complaint_categories(df):
 def predict_vader_sentiment(text):
     if not isinstance(text, str) or not text.strip():
         return "Neutral"
+        
+    text_lower = text.lower()
+    negation_phrases = ["not good", "not great", "not working", "not worth", "not happy", "not recommend", "not recommended", "not bad", "not useful", "not nice", "not fast", "is not good", "was not good", "not good at all", "not satisfied"]
+    for phrase in negation_phrases:
+        if phrase in text_lower:
+            if phrase == "not bad":
+                return "Positive"
+            return "Negative"
+
     if HAS_VADER and VADER_ANALYZER:
         scores = VADER_ANALYZER.polarity_scores(text)
         compound = scores['compound']
@@ -326,6 +335,9 @@ def predict_vader_sentiment(text):
         words = set(re.findall(r'\w+', text.lower()))
         p_count = len(words.intersection(pos_words))
         n_count = len(words.intersection(neg_words))
+        if any(neg in text_lower for neg in ["not", "no", "never", "n't"]):
+            if p_count > 0 and n_count == 0:
+                return "Negative"
         if p_count > n_count:
             return "Positive"
         elif n_count > p_count:
