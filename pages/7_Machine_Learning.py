@@ -41,7 +41,7 @@ if len(df) < 2:
     st.stop()
 
 if df['Label'].nunique() < 2:
-    st.warning(f"⚠️ Machine Learning requires at least 2 distinct sentiment classes (e.g. Positive and Negative). Your dataset currently contains only 1 class ('{df['Label'].iloc[0]}'). Please map sentiment labels in the Dataset tab or auto-generate labels using VADER.")
+    st.info("ℹ️ Supervised Machine Learning requires at least 2 distinct sentiment classes/labels in the dataset. Unsupervised Text Mining, Topic Modeling, Aspect Extraction, and EDA are fully active across all other pages!")
     st.stop()
 
 st.markdown('<div class="premium-card">', unsafe_allow_html=True)

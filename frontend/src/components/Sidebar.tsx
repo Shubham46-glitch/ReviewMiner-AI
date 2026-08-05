@@ -24,6 +24,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     { id: 'upload', label: 'Upload Dataset', icon: Upload },
     { id: 'preprocessing', label: 'Data Preprocessing', icon: Wrench },
     { id: 'eda', label: 'EDA Analytics', icon: BarChart3 },
+    { id: 'product', label: 'Product & Brand', icon: Layers },
+    { id: 'topic', label: 'Topics & Aspects', icon: Sparkles },
     { id: 'sentiment', label: 'Sentiment Dashboard', icon: Smile },
     { id: 'wordcloud', label: 'Word Cloud Analytics', icon: Cloud },
     { id: 'ml', label: 'Machine Learning', icon: Cpu },

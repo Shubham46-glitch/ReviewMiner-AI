@@ -161,3 +161,78 @@ def generate_wordcloud_base64(text: str, colormap: str = "viridis") -> str:
         return "data:image/png;base64," + base64.b64encode(buf.read()).decode('utf-8')
     except Exception:
         return ""
+
+def perform_lda_topic_modeling(df: pd.DataFrame, n_topics: int = 4, n_words: int = 6):
+    if df.empty or 'Cleaned_Text' not in df.columns:
+        return []
+    try:
+        from sklearn.feature_extraction.text import CountVectorizer
+        from sklearn.decomposition import LatentDirichletAllocation
+        
+        corpus = df['Cleaned_Text'].astype(str).tolist()
+        vec = CountVectorizer(max_features=1000, stop_words='english')
+        X_vec = vec.fit_transform(corpus)
+        if X_vec.shape[1] == 0:
+            return []
+            
+        lda = LatentDirichletAllocation(n_components=n_topics, random_state=42)
+        lda.fit(X_vec)
+        
+        words = vec.get_feature_names_out()
+        topics = []
+        for topic_idx, topic in enumerate(lda.components_):
+            top_word_indices = topic.argsort()[:-n_words - 1:-1]
+            top_words = [words[i] for i in top_word_indices]
+            topics.append({
+                "topic_id": f"Topic {topic_idx + 1}",
+                "top_words": top_words,
+                "keywords": ", ".join(top_words)
+            })
+        return topics
+    except Exception:
+        return []
+
+def extract_aspect_sentiments(df: pd.DataFrame):
+    if df.empty or 'Cleaned_Text' not in df.columns:
+        return []
+    
+    aspect_dict = {
+        "Performance": ["fast", "slow", "speed", "performance", "lag", "smooth", "responsive"],
+        "Battery & Power": ["battery", "power", "charge", "charging", "drain", "life"],
+        "Display & Screen": ["display", "screen", "pixel", "bright", "resolution", "color"],
+        "Design & Quality": ["design", "build", "quality", "material", "durable", "finish", "style"],
+        "Delivery & Shipping": ["delivery", "shipping", "shipped", "arrived", "package", "packaging", "box"],
+        "Customer Service": ["support", "service", "help", "email", "staff", "representative", "contact"],
+        "Pricing & Value": ["price", "cost", "value", "worth", "cheap", "expensive", "money"]
+    }
+    
+    aspect_results = []
+    text_corpus = df['Cleaned_Text'].astype(str).tolist()
+    sentiments = df['Label'].astype(str).tolist() if 'Label' in df.columns else ['Neutral'] * len(df)
+    
+    for aspect_name, keywords in aspect_dict.items():
+        total_mentions = 0
+        pos_cnt = 0
+        neg_cnt = 0
+        neu_cnt = 0
+        
+        for text, sent in zip(text_corpus, sentiments):
+            words = set(text.lower().split())
+            if any(kw in words for kw in keywords):
+                total_mentions += 1
+                if sent == 'Positive': pos_cnt += 1
+                elif sent == 'Negative': neg_cnt += 1
+                else: neu_cnt += 1
+                
+        pos_score = round(pos_cnt / total_mentions * 100, 1) if total_mentions > 0 else 50.0
+        aspect_results.append({
+            "aspect": aspect_name,
+            "mentions": total_mentions,
+            "positive_score": pos_score,
+            "positive_count": pos_cnt,
+            "negative_count": neg_cnt,
+            "neutral_count": neu_cnt
+        })
+        
+    return aspect_results
+

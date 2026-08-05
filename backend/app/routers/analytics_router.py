@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Response
 from backend.app.routers.dataset_router import STORED_DATASETS, ACTIVE_DATASET_ID
-from backend.app.services.text_engine import get_top_ngrams, generate_wordcloud_base64
+from backend.app.services.text_engine import get_top_ngrams, generate_wordcloud_base64, perform_lda_topic_modeling, extract_aspect_sentiments
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from fpdf import FPDF
 import pandas as pd
@@ -152,6 +152,22 @@ async def get_bi_analytics():
         "top_positive_features": pos_words[:5],
         "recommendations": recommendations
     }
+
+@router.get("/topics")
+async def get_lda_topics():
+    pdf = get_active_df()
+    if pdf is None or pdf.empty:
+        raise HTTPException(status_code=404, detail="No active dataset loaded.")
+    topics = perform_lda_topic_modeling(pdf, n_topics=4, n_words=6)
+    return {"topics": topics}
+
+@router.get("/aspects")
+async def get_aspect_analytics():
+    pdf = get_active_df()
+    if pdf is None or pdf.empty:
+        raise HTTPException(status_code=404, detail="No active dataset loaded.")
+    aspects = extract_aspect_sentiments(pdf)
+    return {"aspects": aspects}
 
 @router.get("/export-pdf")
 async def export_pdf_report():

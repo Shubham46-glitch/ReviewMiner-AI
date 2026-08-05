@@ -33,8 +33,20 @@ with tab1:
                 st.success(f"File loaded successfully! Found **{temp_df.shape[0]:,}** rows and **{temp_df.shape[1]}** columns.")
                 
                 st.markdown("#### Map Dataset Columns")
-                auto_text, auto_label, auto_plat = data_manager.auto_detect_columns(temp_df)
+                schema_det = data_manager.detect_dataset_schema(temp_df)
                 
+                # Show Detected Schema Badges
+                st.markdown("##### 🔍 Auto-Detected Schema Attributes:")
+                badge_html = '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;">'
+                for skey, sval in schema_det.items():
+                    if sval:
+                        badge_html += f'<span style="background: rgba(6, 182, 212, 0.15); border: 1px solid #06B6D4; color: #06B6D4; padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 700;">{skey.upper()}: {sval}</span>'
+                    else:
+                        badge_html += f'<span style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #64748B; padding: 4px 12px; border-radius: 20px; font-size: 0.78rem;">{skey.upper()}: Not Found</span>'
+                badge_html += '</div>'
+                st.markdown(badge_html, unsafe_allow_html=True)
+                
+                auto_text, auto_label, auto_plat = data_manager.auto_detect_columns(temp_df)
                 all_cols = temp_df.columns.tolist()
                 
                 col_m1, col_m2, col_m3 = st.columns(3)

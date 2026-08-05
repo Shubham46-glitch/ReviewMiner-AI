@@ -100,6 +100,214 @@ def auto_detect_columns(df):
 
     return text_col, label_col, platform_col
 
+def detect_dataset_schema(df):
+    cols = df.columns.tolist()
+    schema = {
+        'text': None,
+        'label': None,
+        'rating': None,
+        'product': None,
+        'brand': None,
+        'category': None,
+        'platform': None,
+        'date': None,
+        'user': None,
+        'location': None,
+        'price': None
+    }
+    
+    # 1. Text Column
+    text_candidates = ['text', 'review', 'reviews', 'comment', 'comments', 'feedback', 'description', 'message', 'content', 'body', 'job_description', 'title', 'summary', 'tweet', 'tweets', 'statement', 'opinion', 'post', 'posts', 'input']
+    for col in cols:
+        if col.lower() in text_candidates:
+            schema['text'] = col
+            break
+    if not schema['text']:
+        max_avg_len = -1
+        for col in cols:
+            if df[col].dtype == 'object' or str(df[col].dtype) == 'string':
+                avg_len = df[col].astype(str).str.len().mean()
+                if avg_len > max_avg_len:
+                    max_avg_len = avg_len
+                    schema['text'] = col
+        if not schema['text'] and len(cols) > 0:
+            schema['text'] = cols[0]
+
+    # 2. Rating Column
+    rating_candidates = ['rating', 'score', 'stars', 'grade', 'review_rating', 'user_rating']
+    for col in cols:
+        if col.lower() in rating_candidates:
+            schema['rating'] = col
+            break
+    if not schema['rating']:
+        for col in cols:
+            if col != schema['text'] and np.issubdtype(df[col].dtype, np.number):
+                min_v, max_v = df[col].min(), df[col].max()
+                if min_v >= 0 and max_v <= 10 and df[col].nunique() <= 10:
+                    schema['rating'] = col
+                    break
+
+    # 3. Label / Sentiment Column
+    label_candidates = ['label', 'sentiment', 'polarity', 'class', 'target']
+    for col in cols:
+        if col != schema['text'] and col.lower() in label_candidates:
+            schema['label'] = col
+            break
+
+    # 4. Product Column
+    prod_candidates = ['product', 'product_name', 'item', 'item_name', 'title', 'app', 'app_name', 'model', 'course']
+    for col in cols:
+        if col != schema['text'] and col.lower() in prod_candidates:
+            schema['product'] = col
+            break
+
+    # 5. Brand Column
+    brand_candidates = ['brand', 'company', 'vendor', 'manufacturer', 'make']
+    for col in cols:
+        if col not in [schema['text'], schema['product']] and col.lower() in brand_candidates:
+            schema['brand'] = col
+            break
+
+    # 6. Category Column
+    cat_candidates = ['category', 'department', 'genre', 'type', 'segment', 'section']
+    for col in cols:
+        if col not in [schema['text'], schema['product'], schema['brand']] and col.lower() in cat_candidates:
+            schema['category'] = col
+            break
+
+    # 7. Platform Column
+    plat_candidates = ['platform', 'source', 'channel', 'device', 'window', 'source_name', 'store']
+    for col in cols:
+        if col not in [schema['text'], schema['product'], schema['brand'], schema['category']] and col.lower() in plat_candidates:
+            schema['platform'] = col
+            break
+
+    # 8. Date Column
+    date_candidates = ['date', 'time', 'timestamp', 'created_at', 'posted_at', 'review_date', 'year', 'month']
+    for col in cols:
+        if col.lower() in date_candidates or 'date' in col.lower() or 'time' in col.lower():
+            schema['date'] = col
+            break
+
+    # 9. User Column
+    user_candidates = ['user', 'username', 'user_id', 'author', 'reviewer', 'customer', 'customer_id']
+    for col in cols:
+        if col.lower() in user_candidates:
+            schema['user'] = col
+            break
+
+    # 10. Location Column
+    loc_candidates = ['location', 'country', 'city', 'state', 'region', 'geo']
+    for col in cols:
+        if col.lower() in loc_candidates:
+            schema['location'] = col
+            break
+
+    # 11. Price Column
+    price_candidates = ['price', 'cost', 'amount', 'msrp', 'val']
+    for col in cols:
+        if col.lower() in price_candidates:
+            schema['price'] = col
+            break
+
+    return schema
+
+def perform_lda_topic_modeling(df, n_topics=4, n_words=6):
+    if df.empty or 'Cleaned_Text' not in df.columns:
+        return []
+    try:
+        from sklearn.feature_extraction.text import CountVectorizer
+        from sklearn.decomposition import LatentDirichletAllocation
+        
+        corpus = df['Cleaned_Text'].astype(str).tolist()
+        vec = CountVectorizer(max_features=1000, stop_words='english')
+        X_vec = vec.fit_transform(corpus)
+        if X_vec.shape[1] == 0:
+            return []
+            
+        lda = LatentDirichletAllocation(n_components=n_topics, random_state=42)
+        lda.fit(X_vec)
+        
+        words = vec.get_feature_names_out()
+        topics = []
+        for topic_idx, topic in enumerate(lda.components_):
+            top_word_indices = topic.argsort()[:-n_words - 1:-1]
+            top_words = [words[i] for i in top_word_indices]
+            topics.append({
+                "topic_id": f"Topic {topic_idx + 1}",
+                "top_words": top_words,
+                "keywords": ", ".join(top_words)
+            })
+        return topics
+    except Exception:
+        return []
+
+def extract_aspect_sentiments(df):
+    if df.empty or 'Cleaned_Text' not in df.columns:
+        return []
+    
+    aspect_dict = {
+        "Performance": ["fast", "slow", "speed", "performance", "lag", "smooth", "responsive"],
+        "Battery & Power": ["battery", "power", "charge", "charging", "drain", "life"],
+        "Display & Screen": ["display", "screen", "pixel", "bright", "resolution", "color"],
+        "Design & Quality": ["design", "build", "quality", "material", "durable", "finish", "style"],
+        "Delivery & Shipping": ["delivery", "shipping", "shipped", "arrived", "package", "packaging", "box"],
+        "Customer Service": ["support", "service", "help", "email", "staff", "representative", "contact"],
+        "Pricing & Value": ["price", "cost", "value", "worth", "cheap", "expensive", "money"]
+    }
+    
+    aspect_results = []
+    text_corpus = df['Cleaned_Text'].astype(str).tolist()
+    sentiments = df['Label'].astype(str).tolist() if 'Label' in df.columns else ['Neutral'] * len(df)
+    
+    for aspect_name, keywords in aspect_dict.items():
+        total_mentions = 0
+        pos_cnt = 0
+        neg_cnt = 0
+        neu_cnt = 0
+        
+        for text, sent in zip(text_corpus, sentiments):
+            words = set(text.lower().split())
+            if any(kw in words for kw in keywords):
+                total_mentions += 1
+                if sent == 'Positive': pos_cnt += 1
+                elif sent == 'Negative': neg_cnt += 1
+                else: neu_cnt += 1
+                
+        pos_score = round(pos_cnt / total_mentions * 100, 1) if total_mentions > 0 else 50.0
+        aspect_results.append({
+            "aspect": aspect_name,
+            "mentions": total_mentions,
+            "positive_score": pos_score,
+            "positive_count": pos_cnt,
+            "negative_count": neg_cnt,
+            "neutral_count": neu_cnt
+        })
+        
+    return aspect_results
+
+def extract_complaint_categories(df):
+    if df.empty or 'Cleaned_Text' not in df.columns:
+        return []
+    
+    complaint_dict = {
+        "Shipping & Delay": ["delay", "late", "shipping", "delivery", "track", "tracking"],
+        "Defect & Damage": ["broken", "damaged", "defect", "faulty", "scratched", "crack", "terrible"],
+        "Poor Quality": ["poor", "bad", "cheap", "worst", "horrible", "awful", "junk"],
+        "Support & Refund": ["support", "refund", "return", "service", "ignore", "response", "email"],
+        "Overpriced": ["expensive", "waste", "overpriced", "worthless", "rip-off"]
+    }
+    
+    results = []
+    neg_corpus = df[df['Label'] == 'Negative']['Cleaned_Text'].astype(str).tolist() if 'Label' in df.columns else df['Cleaned_Text'].astype(str).tolist()
+    
+    for category, keywords in complaint_dict.items():
+        cnt = sum(1 for text in neg_corpus if any(kw in text.lower().split() for kw in keywords))
+        results.append({"category": category, "count": cnt})
+        
+    return sorted(results, key=lambda x: x['count'], reverse=True)
+
+
 def predict_vader_sentiment(text):
     if not isinstance(text, str) or not text.strip():
         return "Neutral"

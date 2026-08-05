@@ -6,6 +6,8 @@ import { LandingPage } from './pages/LandingPage';
 import { UploadDataset } from './pages/UploadDataset';
 import { DataPreprocessing } from './pages/DataPreprocessing';
 import { EDA } from './pages/EDA';
+import { ProductBrandAnalytics } from './pages/ProductBrandAnalytics';
+import { TopicFeatureMining } from './pages/TopicFeatureMining';
 import { SentimentDashboard } from './pages/SentimentDashboard';
 import { WordCloudAnalytics } from './pages/WordCloudAnalytics';
 import { MachineLearning } from './pages/MachineLearning';
@@ -41,6 +43,10 @@ export const App: React.FC = () => {
         return <DataPreprocessing onNavigate={setActiveTab} />;
       case 'eda':
         return <EDA onNavigate={setActiveTab} />;
+      case 'product':
+        return <ProductBrandAnalytics onNavigate={setActiveTab} />;
+      case 'topic':
+        return <TopicFeatureMining onNavigate={setActiveTab} />;
       case 'sentiment':
         return <SentimentDashboard onNavigate={setActiveTab} />;
       case 'wordcloud':
