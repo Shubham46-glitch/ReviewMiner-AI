@@ -67,3 +67,31 @@ if 'Window' in df.columns:
     fig_plat = apply_plotly_theme(fig_plat)
     st.plotly_chart(fig_plat, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
+# Statistical Distribution Analytics (Box Plots & Violin Plots)
+if 'Text' in df.columns:
+    df_stat = df.copy()
+    df_stat['Word_Count'] = df_stat['Text'].astype(str).str.split().str.len()
+    df_stat['Char_Length'] = df_stat['Text'].astype(str).str.len()
+
+    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+    st.subheader("📈 Statistical Text Length & Word Count Distributions")
+    col_s1, col_s2 = st.columns(2)
+    
+    with col_s1:
+        if 'Label' in df_stat.columns:
+            fig_box = px.box(df_stat, x='Label', y='Word_Count', color='Label', color_discrete_map={"Positive": "#22C55E", "Neutral": "#FACC15", "Negative": "#EF4444"}, title="Word Count Box Plot by Sentiment")
+        else:
+            fig_box = px.box(df_stat, y='Word_Count', title="Word Count Box Plot")
+        fig_box = apply_plotly_theme(fig_box)
+        st.plotly_chart(fig_box, use_container_width=True)
+
+    with col_s2:
+        if 'Label' in df_stat.columns:
+            fig_violin = px.violin(df_stat, x='Label', y='Char_Length', color='Label', box=True, points="all", color_discrete_map={"Positive": "#22C55E", "Neutral": "#FACC15", "Negative": "#EF4444"}, title="Character Length Violin Plot")
+        else:
+            fig_violin = px.violin(df_stat, y='Char_Length', box=True, points="all", title="Character Length Violin Plot")
+        fig_violin = apply_plotly_theme(fig_violin)
+        st.plotly_chart(fig_violin, use_container_width=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)

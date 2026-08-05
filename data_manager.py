@@ -183,3 +183,89 @@ def reset_to_default_dataset():
     st.session_state.dataset_name = "No Dataset Loaded"
     st.session_state.raw_df = None
     st.session_state.cleaned_df = None
+
+def compute_kmeans_clusters(df, n_clusters=3):
+    if df.empty or 'Cleaned_Text' not in df.columns:
+        return df, None, None
+    corpus = df['Cleaned_Text'].astype(str).tolist()
+    if len(corpus) < n_clusters:
+        n_clusters = max(1, len(corpus))
+    
+    try:
+        from sklearn.cluster import KMeans
+        from sklearn.decomposition import PCA
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        
+        vec = TfidfVectorizer(max_features=1000, stop_words='english')
+        X_vec = vec.fit_transform(corpus)
+        if X_vec.shape[1] == 0:
+            vec = TfidfVectorizer(max_features=1000)
+            X_vec = vec.fit_transform(corpus)
+            
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        cluster_labels = kmeans.fit_predict(X_vec)
+        
+        df_result = df.copy()
+        df_result['Cluster'] = [f"Cluster {c+1}" for c in cluster_labels]
+        
+        pca = PCA(n_components=2, random_state=42)
+        coords = pca.fit_transform(X_vec.toarray())
+        df_result['PCA_1'] = coords[:, 0]
+        df_result['PCA_2'] = coords[:, 1]
+        
+        return df_result, kmeans, vec
+    except Exception:
+        return df, None, None
+
+def detect_anomalies(df, contamination=0.05):
+    if df.empty or 'Cleaned_Text' not in df.columns:
+        return df
+    try:
+        from sklearn.ensemble import IsolationForest
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from scipy.sparse import hstack
+        
+        df_res = df.copy()
+        df_res['Char_Length'] = df_res['Text'].astype(str).str.len()
+        df_res['Word_Count'] = df_res['Text'].astype(str).str.split().str.len()
+        
+        vec = TfidfVectorizer(max_features=100, stop_words='english')
+        X_vec = vec.fit_transform(df_res['Cleaned_Text'].astype(str))
+        
+        features = np.column_stack([df_res['Char_Length'], df_res['Word_Count']])
+        X_full = hstack([features, X_vec])
+        
+        iso = IsolationForest(contamination=contamination, random_state=42)
+        preds = iso.fit_predict(X_full)
+        scores = iso.decision_function(X_full)
+        
+        df_res['Anomaly_Score'] = np.round(scores, 4)
+        df_res['Is_Anomaly'] = ["Anomaly ⚠️" if p == -1 else "Normal ✅" for p in preds]
+        return df_res
+    except Exception:
+        return df
+
+def match_similarity_vector(df, query_text, top_k=10):
+    if df.empty or 'Cleaned_Text' not in df.columns or not query_text.strip():
+        return pd.DataFrame()
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        
+        corpus = df['Cleaned_Text'].astype(str).tolist()
+        vec = TfidfVectorizer(max_features=2000, stop_words='english')
+        X_vec = vec.fit_transform(corpus)
+        
+        q_clean = clean_text(query_text)
+        if not q_clean.strip():
+            q_clean = query_text.lower()
+            
+        q_vec = vec.transform([q_clean])
+        sims = cosine_similarity(q_vec, X_vec).flatten()
+        
+        df_res = df.copy()
+        df_res['Match_Score'] = np.round(sims * 100, 2)
+        df_res = df_res.sort_values(by='Match_Score', ascending=False).head(top_k).reset_index(drop=True)
+        return df_res
+    except Exception:
+        return pd.DataFrame()

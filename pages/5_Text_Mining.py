@@ -202,6 +202,11 @@ try:
         fig6.update_layout(yaxis={'categoryorder':'total ascending'})
         fig6 = apply_plotly_theme(fig6)
         st.plotly_chart(fig6, use_container_width=True)
+
+        st.subheader("11. Keyword Hierarchy Treemap")
+        fig_tree = px.treemap(tfidf_df, path=['Keyword'], values='TF-IDF Score', color='TF-IDF Score', color_continuous_scale='Viridis', title="Keyword Importance Hierarchy")
+        fig_tree = apply_plotly_theme(fig_tree)
+        st.plotly_chart(fig_tree, use_container_width=True)
     else:
         st.info("No TF-IDF keywords extracted.")
 except Exception:

@@ -22,6 +22,12 @@ def get_active_keyword(title):
         return "Review_Prediction"
     elif "business intelligence" in t:
         return "Business_Intelligence"
+    elif "clustering" in t:
+        return "KMeans_Clustering"
+    elif "anomaly" in t:
+        return "Anomaly_Detection"
+    elif "matcher" in t or "similarity" in t:
+        return "AI_Similarity_Matcher"
     return ""
 
 def setup_page(title, subtitle, icon=""):
@@ -282,6 +288,9 @@ def render_sidebar(active_kw=""):
                         else if (kw === "Machine_Learning") activeIndex = 6;
                         else if (kw === "Review_Prediction") activeIndex = 7;
                         else if (kw === "Business_Intelligence") activeIndex = 8;
+                        else if (kw === "KMeans_Clustering") activeIndex = 9;
+                        else if (kw === "Anomaly_Detection") activeIndex = 10;
+                        else if (kw === "AI_Similarity_Matcher") activeIndex = 11;
                         
                         allLinks.forEach((link, idx) => {
                             const href = link.getAttribute("href") || "";
@@ -356,6 +365,9 @@ def render_sidebar(active_kw=""):
         st.page_link("pages/7_Machine_Learning.py", label="Machine Learning", icon="🤖")
         st.page_link("pages/8_Review_Prediction.py", label="Review Prediction", icon="🔮")
         st.page_link("pages/9_Business_Intelligence.py", label="Business Intelligence", icon="📈")
+        st.page_link("pages/10_KMeans_Clustering.py", label="K-Means Clustering", icon="🧩")
+        st.page_link("pages/11_Anomaly_Detection.py", label="Anomaly Detection", icon="⚠️")
+        st.page_link("pages/12_AI_Similarity_Matcher.py", label="AI Matcher & Similarity", icon="🎯")
 
 def custom_metric_card(title, value, description, color="#7C3AED", icon=""):
     html = f"""
