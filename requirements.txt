@@ -1,3 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+requests
+nltk
 streamlit
 pandas
 plotly
@@ -7,3 +13,4 @@ scikit-learn
 numpy
 joblib
 fpdf
+openpyxl
