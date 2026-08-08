@@ -46,7 +46,9 @@ export const UploadDataset: React.FC<UploadDatasetProps> = ({ onDatasetUpdated, 
       setSelectedPlatCol(res.data.detected.platform_col || 'none');
       onDatasetUpdated();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to upload dataset.');
+      const msg = err.response?.data?.detail || err.message || 'Failed to upload dataset. Ensure backend server is running.';
+      console.error('Upload Error:', err);
+      setError(msg);
     } finally {
       setLoading(false);
     }

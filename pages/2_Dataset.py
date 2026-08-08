@@ -81,8 +81,8 @@ with tab1:
                             auto_label_missing=True
                         )
                         st.session_state['just_uploaded'] = True
-                        st.success(f"Custom Dataset '{uploaded_file.name}' processed successfully!")
-                        st.rerun()
+                        st.toast("Dataset uploaded successfully. Analytics generated.", icon="🎉")
+                        st.switch_page("app.py")
             except Exception as e:
                 st.error(f"Error reading uploaded file: {str(e)}")
 

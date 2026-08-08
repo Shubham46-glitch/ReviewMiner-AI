@@ -1,38 +1,45 @@
 import React from 'react';
 import { 
+  Upload,
   Home, 
-  Upload, 
-  Wrench, 
   BarChart3, 
-  Smile, 
-  Cloud, 
-  Cpu, 
   Sparkles, 
+  Smile, 
+  Cpu, 
   TrendingUp, 
   Layers, 
-  Settings 
+  Settings,
+  Lock,
+  Wrench,
+  Cloud,
+  FileText
 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  isUploaded?: boolean;
+  onDisabledClick?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  activeTab, 
+  setActiveTab, 
+  isUploaded = false,
+  onDisabledClick 
+}) => {
   const menuItems = [
-    { id: 'landing', label: 'Landing Page', icon: Home },
-    { id: 'upload', label: 'Upload Dataset', icon: Upload },
-    { id: 'preprocessing', label: 'Data Preprocessing', icon: Wrench },
+    { id: 'upload', label: 'Upload Dataset', icon: Upload, isFirst: true },
+    { id: 'landing', label: 'Dashboard', icon: Home },
     { id: 'eda', label: 'EDA Analytics', icon: BarChart3 },
-    { id: 'product', label: 'Product & Brand', icon: Layers },
-    { id: 'topic', label: 'Topics & Aspects', icon: Sparkles },
-    { id: 'sentiment', label: 'Sentiment Dashboard', icon: Smile },
-    { id: 'wordcloud', label: 'Word Cloud Analytics', icon: Cloud },
+    { id: 'topic', label: 'Topic & Aspect Mining', icon: Sparkles },
+    { id: 'sentiment', label: 'Sentiment Analysis', icon: Smile },
     { id: 'ml', label: 'Machine Learning', icon: Cpu },
-    { id: 'prediction', label: 'Review Prediction', icon: Sparkles },
+    { id: 'prediction', label: 'Prediction', icon: Sparkles },
     { id: 'bi', label: 'Business Intelligence', icon: TrendingUp },
-    { id: 'comparison', label: 'Dataset Comparison', icon: Layers },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'comparison', label: 'AI Insights', icon: Layers },
+    { id: 'report', label: 'Executive Report', icon: FileText },
+    { id: 'settings', label: 'Platform Settings', icon: Settings },
   ];
 
   return (
@@ -52,18 +59,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
+          const isLocked = !isUploaded && item.id !== 'upload';
+
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${
+              onClick={() => {
+                if (isLocked) {
+                  if (onDisabledClick) onDisabledClick();
+                } else {
+                  setActiveTab(item.id);
+                }
+              }}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${
                 isActive
                   ? 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white font-bold shadow-lg shadow-purple-500/30 border border-cyan-400/50'
+                  : isLocked
+                  ? 'opacity-45 text-slate-500 hover:text-slate-400 hover:bg-slate-900/50 cursor-not-allowed border border-transparent'
                   : 'text-slate-400 hover:text-white hover:bg-purple-600/20 hover:border-purple-500/30 border border-transparent'
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-400'}`} />
-              <span>{item.label}</span>
+              <div className="flex items-center gap-3">
+                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : isLocked ? 'text-slate-600' : 'text-purple-400'}`} />
+                <span>{item.label}</span>
+              </div>
+              {isLocked && <Lock className="w-3.5 h-3.5 text-slate-500" />}
             </button>
           );
         })}
@@ -75,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
           <span>Engine Status</span>
           <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            FastAPI Online
+            {isUploaded ? 'Dataset Active' : 'Upload Required'}
           </span>
         </div>
       </div>

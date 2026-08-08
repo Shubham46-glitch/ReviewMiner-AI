@@ -356,18 +356,26 @@ def render_sidebar(active_kw=""):
         
 
 
+        st.page_link("pages/2_Dataset.py", label="Upload Dataset", icon="📂")
         st.page_link("app.py", label="Dashboard", icon="🏠")
-        st.page_link("pages/2_Dataset.py", label="Dataset Upload & Info", icon="📂")
         st.page_link("pages/3_EDA.py", label="EDA", icon="📊")
-        st.page_link("pages/4_Product_Brand_Analytics.py", label="Product & Brand Intelligence", icon="🏢")
         st.page_link("pages/5_Topic_Feature_Mining.py", label="Topic & Aspect Mining", icon="🔍")
         st.page_link("pages/6_Sentiment_Analysis.py", label="Sentiment Analysis", icon="😊")
         st.page_link("pages/7_Machine_Learning.py", label="Machine Learning", icon="🤖")
-        st.page_link("pages/8_Review_Prediction.py", label="Review Prediction", icon="🔮")
+        st.page_link("pages/8_Review_Prediction.py", label="Prediction", icon="🔮")
         st.page_link("pages/9_Business_Intelligence.py", label="Business Intelligence", icon="📈")
+        st.page_link("pages/4_Product_Brand_Analytics.py", label="Product & Brand Intelligence", icon="🏢")
         st.page_link("pages/10_KMeans_Clustering.py", label="K-Means Clustering", icon="🧩")
         st.page_link("pages/11_Anomaly_Detection.py", label="Anomaly Detection", icon="⚠️")
         st.page_link("pages/12_AI_Similarity_Matcher.py", label="AI Matcher & Similarity", icon="🎯")
+
+def check_dataset_loaded():
+    if not data_manager.is_custom_data_active():
+        st.warning("🔒 Upload a dataset to unlock analytics.")
+        st.info("The application cannot generate analytics until a dataset is uploaded. Please navigate to the **Upload Dataset** page to get started.")
+        if st.button("📂 Go to Dataset Upload Center", type="primary", use_container_width=True):
+            st.switch_page("pages/2_Dataset.py")
+        st.stop()
 
 def custom_metric_card(title, value, description, color="#7C3AED", icon=""):
     html = f"""

@@ -212,26 +212,52 @@ def detect_dataset_schema(df):
 
     return schema
 
+def get_cleaned_text_series(df):
+    if df is None or df.empty:
+        return pd.Series(dtype=str)
+    if 'Cleaned_Text' in df.columns:
+        return df['Cleaned_Text'].astype(str).fillna('')
+    text_col, _, _ = auto_detect_columns(df)
+    if text_col and text_col in df.columns:
+        return df[text_col].astype(str).apply(lambda x: clean_text(x))
+    for col in df.columns:
+        if df[col].dtype == 'object' or str(df[col].dtype) == 'string':
+            return df[col].astype(str).apply(lambda x: clean_text(x))
+    return df.iloc[:, 0].astype(str).apply(lambda x: clean_text(x))
+
 def perform_lda_topic_modeling(df, n_topics=4, n_words=6):
-    if df.empty or 'Cleaned_Text' not in df.columns:
+    if df is None or df.empty:
         return []
     try:
         from sklearn.feature_extraction.text import CountVectorizer
         from sklearn.decomposition import LatentDirichletAllocation
         
-        corpus = df['Cleaned_Text'].astype(str).tolist()
-        vec = CountVectorizer(max_features=1000, stop_words='english')
-        X_vec = vec.fit_transform(corpus)
-        if X_vec.shape[1] == 0:
+        corpus_ser = get_cleaned_text_series(df)
+        corpus = corpus_ser.tolist()
+        if not corpus or not any(c.strip() for c in corpus):
             return []
             
-        lda = LatentDirichletAllocation(n_components=n_topics, random_state=42)
+        vec = CountVectorizer(max_features=1000, stop_words='english', min_df=1)
+        X_vec = vec.fit_transform(corpus)
+        if X_vec.shape[1] == 0:
+            vec = CountVectorizer(max_features=1000, stop_words=None, min_df=1)
+            X_vec = vec.fit_transform(corpus)
+            if X_vec.shape[1] == 0:
+                return []
+            
+        actual_words_count = X_vec.shape[1]
+        n_words_eff = min(n_words, actual_words_count)
+        n_topics_eff = min(n_topics, X_vec.shape[0])
+        if n_topics_eff < 1:
+            return []
+            
+        lda = LatentDirichletAllocation(n_components=n_topics_eff, random_state=42)
         lda.fit(X_vec)
         
         words = vec.get_feature_names_out()
         topics = []
         for topic_idx, topic in enumerate(lda.components_):
-            top_word_indices = topic.argsort()[:-n_words - 1:-1]
+            top_word_indices = topic.argsort()[:-n_words_eff - 1:-1]
             top_words = [words[i] for i in top_word_indices]
             topics.append({
                 "topic_id": f"Topic {topic_idx + 1}",
@@ -243,22 +269,29 @@ def perform_lda_topic_modeling(df, n_topics=4, n_words=6):
         return []
 
 def extract_aspect_sentiments(df):
-    if df.empty or 'Cleaned_Text' not in df.columns:
+    if df is None or df.empty:
         return []
     
     aspect_dict = {
-        "Performance": ["fast", "slow", "speed", "performance", "lag", "smooth", "responsive"],
-        "Battery & Power": ["battery", "power", "charge", "charging", "drain", "life"],
-        "Display & Screen": ["display", "screen", "pixel", "bright", "resolution", "color"],
-        "Design & Quality": ["design", "build", "quality", "material", "durable", "finish", "style"],
-        "Delivery & Shipping": ["delivery", "shipping", "shipped", "arrived", "package", "packaging", "box"],
-        "Customer Service": ["support", "service", "help", "email", "staff", "representative", "contact"],
-        "Pricing & Value": ["price", "cost", "value", "worth", "cheap", "expensive", "money"]
+        "Performance": ["fast", "slow", "speed", "performance", "lag", "smooth", "responsive", "quick", "stutter", "freeze", "crash", "work", "working", "efficiency"],
+        "Battery & Power": ["battery", "power", "charge", "charger", "charging", "drain", "life", "backup", "hour", "hours", "plug", "warm", "heat", "heating"],
+        "Display & Screen": ["display", "screen", "pixel", "bright", "brightness", "resolution", "color", "touch", "panel", "visual", "glass", "monitor", "view"],
+        "Design & Quality": ["design", "build", "quality", "material", "durable", "durability", "finish", "style", "look", "solid", "feeling", "weight", "craftsmanship", "fit"],
+        "Delivery & Shipping": ["delivery", "shipping", "shipped", "arrived", "arrival", "package", "packaging", "box", "deliver", "courier", "dispatch", "received", "transit"],
+        "Customer Service": ["support", "service", "help", "email", "staff", "representative", "contact", "agent", "call", "care", "rep", "executive", "assistance"],
+        "Pricing & Value": ["price", "cost", "value", "worth", "cheap", "expensive", "money", "dollar", "affordable", "deal", "pay", "buy", "purchase", "amount"]
     }
     
     aspect_results = []
-    text_corpus = df['Cleaned_Text'].astype(str).tolist()
-    sentiments = df['Label'].astype(str).tolist() if 'Label' in df.columns else ['Neutral'] * len(df)
+    text_corpus = get_cleaned_text_series(df).tolist()
+    
+    text_col, label_col, _ = auto_detect_columns(df)
+    if label_col and label_col in df.columns:
+        sentiments = df[label_col].astype(str).tolist()
+    elif 'Label' in df.columns:
+        sentiments = df['Label'].astype(str).tolist()
+    else:
+        sentiments = ['Neutral'] * len(df)
     
     for aspect_name, keywords in aspect_dict.items():
         total_mentions = 0
@@ -267,14 +300,18 @@ def extract_aspect_sentiments(df):
         neu_cnt = 0
         
         for text, sent in zip(text_corpus, sentiments):
-            words = set(text.lower().split())
-            if any(kw in words for kw in keywords):
+            t_lower = text.lower()
+            if any(re.search(rf'\b{re.escape(kw)}', t_lower) or kw in t_lower for kw in keywords):
                 total_mentions += 1
-                if sent == 'Positive': pos_cnt += 1
-                elif sent == 'Negative': neg_cnt += 1
-                else: neu_cnt += 1
+                sent_str = str(sent).lower()
+                if any(p in sent_str for p in ['pos', '5', '4', 'good', 'high']):
+                    pos_cnt += 1
+                elif any(n in sent_str for n in ['neg', '1', '2', 'bad', 'low']):
+                    neg_cnt += 1
+                else:
+                    neu_cnt += 1
                 
-        pos_score = round(pos_cnt / total_mentions * 100, 1) if total_mentions > 0 else 50.0
+        pos_score = round(pos_cnt / total_mentions * 100, 1) if total_mentions > 0 else (65.0 if pos_cnt >= neg_cnt else 35.0)
         aspect_results.append({
             "aspect": aspect_name,
             "mentions": total_mentions,
@@ -287,62 +324,145 @@ def extract_aspect_sentiments(df):
     return aspect_results
 
 def extract_complaint_categories(df):
-    if df.empty or 'Cleaned_Text' not in df.columns:
+    if df is None or df.empty:
         return []
     
     complaint_dict = {
-        "Shipping & Delay": ["delay", "late", "shipping", "delivery", "track", "tracking"],
-        "Defect & Damage": ["broken", "damaged", "defect", "faulty", "scratched", "crack", "terrible"],
-        "Poor Quality": ["poor", "bad", "cheap", "worst", "horrible", "awful", "junk"],
-        "Support & Refund": ["support", "refund", "return", "service", "ignore", "response", "email"],
-        "Overpriced": ["expensive", "waste", "overpriced", "worthless", "rip-off"]
+        "Shipping & Delay": ["delay", "late", "shipping", "delivery", "track", "tracking", "courier", "slow", "dispatched", "transit", "arrive"],
+        "Defect & Damage": ["broken", "damaged", "defect", "faulty", "scratched", "crack", "terrible", "cracked", "issue", "malfunction", "flaw"],
+        "Poor Quality": ["poor", "bad", "cheap", "worst", "horrible", "awful", "junk", "useless", "sucks", "disappointing", "subpar"],
+        "Support & Refund": ["support", "refund", "return", "service", "ignore", "response", "email", "unfriendly", "staff", "call", "agent", "contact"],
+        "Overpriced & Value": ["expensive", "waste", "overpriced", "worthless", "rip-off", "ripoff", "money", "scam", "cost", "price", "charge"]
     }
     
+    text_col, label_col, _ = auto_detect_columns(df)
+    if label_col and label_col in df.columns:
+        neg_df = df[df[label_col].astype(str).str.lower().str.contains("neg|1|2|bad|low", na=False)]
+    elif 'Label' in df.columns:
+        neg_df = df[df['Label'].astype(str).str.lower().str.contains("neg|1|2|bad|low", na=False)]
+    else:
+        neg_df = df
+
+    neg_corpus = get_cleaned_text_series(neg_df if not neg_df.empty else df).tolist()
+
     results = []
-    neg_corpus = df[df['Label'] == 'Negative']['Cleaned_Text'].astype(str).tolist() if 'Label' in df.columns else df['Cleaned_Text'].astype(str).tolist()
-    
     for category, keywords in complaint_dict.items():
-        cnt = sum(1 for text in neg_corpus if any(kw in text.lower().split() for kw in keywords))
+        cnt = sum(1 for text in neg_corpus if any(re.search(rf'\b{re.escape(kw)}', text.lower()) or kw in text.lower() for kw in keywords))
         results.append({"category": category, "count": cnt})
         
     return sorted(results, key=lambda x: x['count'], reverse=True)
 
 
 def predict_vader_sentiment(text):
-    if not isinstance(text, str) or not text.strip():
-        return "Neutral"
-        
-    text_lower = text.lower()
-    negation_phrases = ["not good", "not great", "not working", "not worth", "not happy", "not recommend", "not recommended", "not bad", "not useful", "not nice", "not fast", "is not good", "was not good", "not good at all", "not satisfied"]
-    for phrase in negation_phrases:
-        if phrase in text_lower:
-            if phrase == "not bad":
-                return "Positive"
-            return "Negative"
+    pred, _ = get_vader_prediction_with_probs(text)
+    return pred
 
+def normalize_text_typos(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    # Normalize double -ll typos (e.g. helpfull -> helpful, wonderfull -> wonderful, usefull -> useful)
+    text_norm = re.sub(r'(\w+)full\b', r'\1ful', text, flags=re.IGNORECASE)
+    # Normalize 3+ repeated characters (e.g. goooood -> good, superrr -> super, baddd -> bad)
+    text_norm = re.sub(r'(.)\1{2,}', r'\1\1', text_norm)
+    return text_norm
+
+def get_vader_prediction_with_probs(text):
+    if not isinstance(text, str) or not text.strip():
+        return "Neutral", {"Negative": 0.15, "Neutral": 0.70, "Positive": 0.15}
+    
+    raw_lower = text.lower().strip()
+    norm_lower = normalize_text_typos(raw_lower)
+    
+    # 1. Direct Rating / Star Patterns
+    if re.search(r'\b(1|2)\s*(star|stars|\/5|\/10|out of 5|out of 10)\b', norm_lower):
+        return "Negative", {"Negative": 0.90, "Neutral": 0.07, "Positive": 0.03}
+    if re.search(r'\b(4|5)\s*(star|stars|\/5|\/10|out of 5|out of 10)\b', norm_lower):
+        return "Positive", {"Negative": 0.03, "Neutral": 0.07, "Positive": 0.90}
+
+    # 2. Strong Negation & Dislike Phrases (check both raw and normalized)
+    strong_negative_phrases = [
+        "not good", "not great", "not working", "not worth", "not happy", "not recommend",
+        "not recommended", "would not recommend", "wouldn't recommend", "not useful", "not nice",
+        "not fast", "is not good", "was not good", "not good at all", "not satisfied", "not friendly",
+        "don't like", "dont like", "do not like", "didnt like", "didn't like", "did not like",
+        "never buy", "never again", "waste of money", "waste of time", "total scam", "rip off",
+        "ripoff", "worst experience", "worst product", "terrible experience", "horrible experience",
+        "poor quality", "cheap quality", "bad quality", "rude staff", "unfriendly", "broken on arrival",
+        "defective", "junk", "useless", "garbage", "trash", "rubbish", "sucks", "disliked"
+    ]
+    for phrase in strong_negative_phrases:
+        if phrase in raw_lower or phrase in norm_lower:
+            return "Negative", {"Negative": 0.88, "Neutral": 0.08, "Positive": 0.04}
+
+    # 3. Strong Positive Phrases (check both raw and normalized)
+    strong_positive_phrases = [
+        "not bad", "super friendly", "very friendly", "highly recommend", "must buy",
+        "worth buying", "worth the money", "value for money", "works great", "works perfectly",
+        "top notch", "five stars", "5 stars", "excellent service", "great service", "helpful staff",
+        "very helpful", "very helpfull", "super helpful", "super helpfull", "love it", "loved it",
+        "best product", "awesome product", "superb quality"
+    ]
+    for phrase in strong_positive_phrases:
+        if phrase in raw_lower or phrase in norm_lower:
+            return "Positive", {"Negative": 0.04, "Neutral": 0.11, "Positive": 0.85}
+
+    # 3.5 Neutral Phrases & Indicators
+    neutral_phrases = ["okay", "ok", "average", "nothing special", "does the job", "decent", "as expected", "so so", "mediocre", "fair"]
+    if any(np_phrase in raw_lower or np_phrase in norm_lower for np_phrase in neutral_phrases) and not any(p in raw_lower for p in ["not okay", "not ok", "not good", "terrible", "worst", "broken", "awful", "horrible"]):
+        return "Neutral", {"Negative": 0.08, "Neutral": 0.84, "Positive": 0.08}
+
+    # 4. NLTK VADER Polarity Scoring (run on normalized text to catch typos)
     if HAS_VADER and VADER_ANALYZER:
-        scores = VADER_ANALYZER.polarity_scores(text)
+        scores = VADER_ANALYZER.polarity_scores(norm_lower)
         compound = scores['compound']
+        
+        if compound == 0.0:
+            pos_words = set(['good', 'great', 'excellent', 'amazing', 'love', 'best', 'awesome', 'nice', 'perfect', 'happy', 'fantastic', 'superb', 'fast', 'recommend', 'friendly', 'helpful', 'helpfull', 'liked', 'enjoyed', 'useful', 'usefull', 'wonderful', 'wonderfull'])
+            neg_words = set(['bad', 'terrible', 'worst', 'horrible', 'poor', 'hate', 'awful', 'waste', 'slow', 'broken', 'disappointed', 'junk', 'cheap', 'useless', 'sucks', 'unfriendly', 'rude', 'faulty', 'lame'])
+            words = set(re.findall(r'\w+', norm_lower))
+            p_cnt = len(words.intersection(pos_words))
+            n_cnt = len(words.intersection(neg_words))
+            has_negation = any(n in norm_lower for n in ["not", "no", "never", "n't", "dont", "cant", "didnt", "without"])
+            
+            if has_negation and (p_cnt > 0 or "friendly" in norm_lower or "like" in norm_lower or "help" in norm_lower):
+                return "Negative", {"Negative": 0.82, "Neutral": 0.12, "Positive": 0.06}
+            if p_cnt > n_cnt:
+                return "Positive", {"Negative": 0.06, "Neutral": 0.14, "Positive": 0.80}
+            elif n_cnt > p_cnt:
+                return "Negative", {"Negative": 0.80, "Neutral": 0.14, "Positive": 0.06}
+
         if compound >= 0.05:
-            return "Positive"
+            pred = "Positive"
+            pos_p = round(min(0.96, 0.50 + 0.46 * compound), 2)
+            neu_p = round((1.0 - pos_p) * 0.7, 2)
+            neg_p = round(1.0 - pos_p - neu_p, 2)
         elif compound <= -0.05:
-            return "Negative"
+            pred = "Negative"
+            neg_p = round(min(0.96, 0.50 + 0.46 * abs(compound)), 2)
+            neu_p = round((1.0 - neg_p) * 0.7, 2)
+            pos_p = round(1.0 - neg_p - neu_p, 2)
         else:
-            return "Neutral"
-    else:
-        pos_words = set(['good', 'great', 'excellent', 'amazing', 'love', 'best', 'awesome', 'nice', 'perfect', 'happy', 'fantastic'])
-        neg_words = set(['bad', 'terrible', 'worst', 'horrible', 'poor', 'hate', 'awful', 'waste', 'slow', 'broken', 'disappointed'])
-        words = set(re.findall(r'\w+', text.lower()))
-        p_count = len(words.intersection(pos_words))
-        n_count = len(words.intersection(neg_words))
-        if any(neg in text_lower for neg in ["not", "no", "never", "n't"]):
-            if p_count > 0 and n_count == 0:
-                return "Negative"
-        if p_count > n_count:
-            return "Positive"
-        elif n_count > p_count:
-            return "Negative"
-        return "Neutral"
+            pred = "Neutral"
+            neu_p = round(min(0.85, 0.60 + 0.35 * (1.0 - abs(compound))), 2)
+            pos_p = round((1.0 - neu_p) / 2, 2)
+            neg_p = round(1.0 - neu_p - pos_p, 2)
+        return pred, {"Negative": neg_p, "Neutral": neu_p, "Positive": pos_p}
+
+    # 5. Rule-Based Fallback Lexicon
+    pos_words = set(['good', 'great', 'excellent', 'amazing', 'love', 'best', 'awesome', 'nice', 'perfect', 'happy', 'fantastic', 'superb', 'fast', 'recommend', 'friendly', 'helpful', 'helpfull', 'liked', 'useful', 'usefull', 'wonderful', 'wonderfull', 'satisfied', 'worth', 'delighted'])
+    neg_words = set(['bad', 'terrible', 'worst', 'horrible', 'poor', 'hate', 'awful', 'waste', 'slow', 'broken', 'disappointed', 'junk', 'cheap', 'useless', 'sucks', 'unfriendly', 'rude', 'faulty', 'scam', 'crap', 'rubbish', 'garbage', 'trash', 'defective', 'lame', 'disliked', 'delay', 'delayed', 'damaged', 'ripoff', 'overpriced', 'expensive', 'refund', 'flaw', 'flawed', 'fail', 'failed', 'failing'])
+    words = set(re.findall(r'\w+', norm_lower))
+    p_cnt = len(words.intersection(pos_words))
+    n_cnt = len(words.intersection(neg_words))
+    has_neg = any(neg in norm_lower for neg in ["not", "no", "never", "n't", "dont", "cant", "didnt", "without"])
+
+    if has_neg and (p_cnt > 0 or "like" in norm_lower or "friendly" in norm_lower or "help" in norm_lower or "good" in norm_lower or "great" in norm_lower or "working" in norm_lower):
+        return "Negative", {"Negative": 0.82, "Neutral": 0.12, "Positive": 0.06}
+    if p_cnt > n_cnt:
+        return "Positive", {"Negative": 0.06, "Neutral": 0.14, "Positive": 0.80}
+    elif n_cnt > p_cnt:
+        return "Negative", {"Negative": 0.80, "Neutral": 0.14, "Positive": 0.06}
+    return "Neutral", {"Negative": 0.20, "Neutral": 0.60, "Positive": 0.20}
 
 def process_and_set_custom_df(raw_df, text_col, label_col=None, platform_col=None, dataset_name="Custom Uploaded Dataset", auto_label_missing=True):
     init_session_state()
@@ -489,3 +609,18 @@ def match_similarity_vector(df, query_text, top_k=10):
         return df_res
     except Exception:
         return pd.DataFrame()
+
+def get_top_ngrams(corpus_series, n=15, ngram_range=(1,1)):
+    if corpus_series.empty or not corpus_series.astype(str).str.strip().any():
+        return pd.DataFrame(columns=['word', 'frequency'])
+    try:
+        from sklearn.feature_extraction.text import CountVectorizer
+        vec = CountVectorizer(ngram_range=ngram_range, stop_words='english').fit(corpus_series.astype(str))
+        bag = vec.transform(corpus_series.astype(str))
+        sum_words = bag.sum(axis=0)
+        words_freq = [(word, int(sum_words[0, idx])) for word, idx in vec.vocabulary_.items()]
+        words_freq = sorted(words_freq, key=lambda x: x[1], reverse=True)[:n]
+        return pd.DataFrame(words_freq, columns=['word', 'frequency'])
+    except Exception:
+        return pd.DataFrame(columns=['word', 'frequency'])
+

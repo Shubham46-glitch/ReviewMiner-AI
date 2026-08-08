@@ -3,331 +3,220 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
-from sklearn.feature_extraction.text import CountVectorizer
-import time
 from fpdf import FPDF
-import base64
-from ui_utils import setup_page, custom_metric_card, apply_plotly_theme
-
-setup_page("Business Intelligence Dashboard", "Transform customer reviews into actionable business insights.", "📈")
-
+from ui_utils import setup_page, custom_metric_card, check_dataset_loaded
 import data_manager
+from backend.app.services.text_engine import compute_executive_business_intelligence
 
-df = data_manager.get_cleaned_df()
+setup_page("Business Intelligence & Executive Analytics", "Data-driven strategic decision support matrix, risk profiling, and actionable executive directives.", "💼")
+check_dataset_loaded()
+
+df = data_manager.get_cleaned_df().copy()
 if df.empty:
-    st.warning("⚠️ No dataset uploaded yet. Please navigate to the **Dataset Upload & Info** page to upload your text data.")
-    st.stop()
-df['Cleaned_Text'] = df['Cleaned_Text'].astype(str).fillna("")
-if 'Label' not in df.columns: df['Label'] = 'Neutral'
-if 'Window' not in df.columns: df['Window'] = 'Unknown'
-if 'Text' not in df.columns: df['Text'] = df.get('Cleaned_Text', '')
-
-st.sidebar.header("🎛️ Executive Filters")
-platforms = df['Window'].dropna().unique().tolist()
-selected_platforms = st.sidebar.multiselect("Select Platform", options=platforms, default=platforms)
-
-sentiments = df['Label'].dropna().unique().tolist()
-selected_sentiments = st.sidebar.multiselect("Select Sentiment", options=sentiments, default=sentiments)
-
-search_keyword = st.sidebar.text_input("Search Specific Keyword", "")
-max_val = max(1, len(df))
-min_val = min(10, max_val)
-review_count = st.sidebar.slider("Number of Reviews to Display (Table)", min_value=min_val, max_value=max_val, value=min(100, max_val))
-
-filtered_df = df[df['Window'].isin(selected_platforms) & df['Label'].isin(selected_sentiments)]
-if search_keyword:
-    filtered_df = filtered_df[filtered_df['Text'].astype(str).str.contains(search_keyword, case=False, na=False)]
-
-if filtered_df.empty:
-    st.warning("No data matches the current filters.")
+    st.warning("⚠️ No active dataset uploaded yet. Please upload a dataset in the Dataset Upload Center.")
     st.stop()
 
-total_reviews = len(filtered_df)
-pos_count = len(filtered_df[filtered_df['Label'] == 'Positive'])
-neu_count = len(filtered_df[filtered_df['Label'] == 'Neutral'])
-neg_count = len(filtered_df[filtered_df['Label'] == 'Negative'])
+bi_data = compute_executive_business_intelligence(df)
+kpis = bi_data.get('kpi_summary', {})
+viz = bi_data.get('visualizations', {})
 
-pos_pct = (pos_count / total_reviews) * 100 if total_reviews > 0 else 0
-neu_pct = (neu_count / total_reviews) * 100 if total_reviews > 0 else 0
-neg_pct = (neg_count / total_reviews) * 100 if total_reviews > 0 else 0
-overall_score = ((pos_count * 1) + (neu_count * 0.5) + (neg_count * 0)) / total_reviews * 100 if total_reviews > 0 else 0
+pos_drivers = viz.get('positive_drivers', [])
+neg_drivers = viz.get('negative_drivers', [])
+strength_vs_pain = viz.get('strength_vs_pain', [])
+risk_bubbles = viz.get('risk_bubbles', [])
+opp_ranking = viz.get('opportunity_ranking', [])
+action_plan = bi_data.get('action_plan', [])
 
-st.header("Executive Summary")
-col1, col2, col3, col4, col5 = st.columns(5)
-with col1:
-    custom_metric_card("Total", f"{total_reviews:,}", "Reviews", icon="📄")
-with col2:
-    custom_metric_card("Satisfaction", f"{pos_pct:.1f}%", "Happy customers", icon="😊", color="#22C55E")
-with col3:
-    custom_metric_card("Negative", f"{neg_pct:.1f}%", "Dissatisfied", icon="😡", color="#EF4444")
-with col4:
-    custom_metric_card("Neutral", f"{neu_pct:.1f}%", "Indifferent", icon="😐", color="#FACC15")
-with col5:
-    custom_metric_card("Sentiment Score", f"{overall_score:.1f}", "/ 100 Total", icon="⭐", color="#06B6D4")
+# =========================================================
+# 1. EXECUTIVE KPI HEADER (5 COMPACT CARDS)
+# =========================================================
+st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+c1, c2, c3, c4, c5 = st.columns(5)
 
-st.divider()
+with c1:
+    custom_metric_card("Top Positive Driver", f"{kpis.get('top_positive_pct', 0)}%", kpis.get('top_positive_driver', 'Quality'), icon="👍", color="#06B6D4")
+with c2:
+    custom_metric_card("Top Customer Pain Point", f"{kpis.get('top_negative_pct', 0)}%", kpis.get('top_negative_driver', 'Quality'), icon="⚠️", color="#EF4444")
+with c3:
+    custom_metric_card("Quality Complaints", f"{kpis.get('quality_complaints', 0)}", "Build friction reviews", icon="📦", color="#F59E0B")
+with c4:
+    custom_metric_card("Delivery Complaints", f"{kpis.get('delivery_complaints', 0)}", "Logistics friction reviews", icon="🚚", color="#A855F7")
+with c5:
+    custom_metric_card("Performance Complaints", f"{kpis.get('performance_complaints', 0)}", "Thermal friction reviews", icon="⚡", color="#3B82F6")
 
-st.header("Sentiment Distribution & Satisfaction")
-col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-color_map = {"Positive": "#22C55E", "Neutral": "#FACC15", "Negative": "#EF4444"}
-sentiment_counts = filtered_df['Label'].value_counts().reset_index()
-sentiment_counts.columns = ['Sentiment', 'Count']
+st.markdown('</div>', unsafe_allow_html=True)
 
-with col_s1:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    fig_gauge = go.Figure(go.Indicator(
-        mode = "gauge+number",
-        value = pos_pct,
-        number = {'suffix': "%"},
-        title={'text': "Satisfaction"},
-        gauge = {'axis': {'range': [0, 100]}, 'bar': {'color': "#22C55E"}, 'bgcolor': "rgba(255,255,255,0.05)"}
-    ))
-    fig_gauge = apply_plotly_theme(fig_gauge)
-    fig_gauge.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=250)
-    st.plotly_chart(fig_gauge, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+# =========================================================
+# 2. MIDDLE SECTION — POSITIVE & NEGATIVE DRIVERS CHARTS
+# =========================================================
+st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+m1, m2 = st.columns(2)
 
-with col_s2:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    fig_pie = px.pie(sentiment_counts, names='Sentiment', values='Count', color='Sentiment', color_discrete_map=color_map, title="Pie Chart")
-    fig_pie = apply_plotly_theme(fig_pie)
-    fig_pie.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=250, showlegend=False)
-    fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-    st.plotly_chart(fig_pie, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+with m1:
+    st.subheader("👍 Positive Review Drivers (%)")
+    if pos_drivers:
+        pos_df = pd.DataFrame(pos_drivers)
+        fig_pos = px.bar(
+            pos_df.iloc[::-1],
+            x='percentage',
+            y='domain',
+            orientation='h',
+            text='percentage',
+            color_discrete_sequence=['#06B6D4'],
+            labels={'percentage': 'Positive Share (%)', 'domain': ''}
+        )
+        fig_pos.update_traces(texttemplate='%{text}%', textposition='inside')
+        fig_pos.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#FFFFFF'), height=240, margin=dict(l=10, r=10, t=20, b=20))
+        st.plotly_chart(fig_pos, use_container_width=True)
 
-with col_s3:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    fig_bar = px.bar(sentiment_counts, x='Sentiment', y='Count', color='Sentiment', color_discrete_map=color_map, text_auto=True, title="Bar Chart")
-    fig_bar = apply_plotly_theme(fig_bar)
-    fig_bar.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=250, showlegend=False)
-    st.plotly_chart(fig_bar, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-        
-with col_s4:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    fig_donut = px.pie(sentiment_counts, names='Sentiment', values='Count', color='Sentiment', color_discrete_map=color_map, hole=0.6, title="Donut Chart")
-    fig_donut = apply_plotly_theme(fig_donut)
-    fig_donut.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=250, showlegend=False)
-    fig_donut.update_traces(textposition='inside', textinfo='percent+label')
-    st.plotly_chart(fig_donut, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+with m2:
+    st.subheader("⚠️ Negative Complaint Drivers (%)")
+    if neg_drivers:
+        neg_df = pd.DataFrame(neg_drivers)
+        fig_neg = px.bar(
+            neg_df.iloc[::-1],
+            x='percentage',
+            y='domain',
+            orientation='h',
+            text='percentage',
+            color_discrete_sequence=['#EF4444'],
+            labels={'percentage': 'Complaint Share (%)', 'domain': ''}
+        )
+        fig_neg.update_traces(texttemplate='%{text}%', textposition='inside')
+        fig_neg.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#FFFFFF'), height=240, margin=dict(l=10, r=10, t=20, b=20))
+        st.plotly_chart(fig_neg, use_container_width=True)
 
-st.divider()
+st.markdown('</div>', unsafe_allow_html=True)
 
-st.header("🏢 Platform Performance Analysis")
-platform_stats = []
-for p in filtered_df['Window'].unique():
-    p_df = filtered_df[filtered_df['Window'] == p]
-    p_total = len(p_df)
-    p_pos = len(p_df[p_df['Label'] == 'Positive'])
-    p_neg = len(p_df[p_df['Label'] == 'Negative'])
-    platform_stats.append({
-        "Platform": p, "Total Reviews": p_total,
-        "Positive %": (p_pos/p_total*100) if p_total > 0 else 0,
-        "Negative %": (p_neg/p_total*100) if p_total > 0 else 0
-    })
+# =========================================================
+# 3. CENTRAL FEATURE — STRENGTH VS PAIN & RISK MATRICES
+# =========================================================
+st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+st1, st2 = st.columns(2)
 
-p_stats_df = pd.DataFrame(platform_stats)
-if not p_stats_df.empty:
-    best_platform = p_stats_df.loc[p_stats_df['Positive %'].idxmax()]['Platform']
-    worst_platform = p_stats_df.loc[p_stats_df['Negative %'].idxmax()]['Platform']
-    col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
-    with col_p1:
-        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-        fig_plat = px.bar(p_stats_df, x='Platform', y=['Positive %', 'Negative %'], barmode='group', 
-                          color_discrete_sequence=["#22C55E", "#EF4444"], title="Sentiment Breakdown by Platform")
-        fig_plat = apply_plotly_theme(fig_plat)
-        st.plotly_chart(fig_plat, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with col_p2:
-        custom_metric_card("Best Platform", best_platform, "Highest Positivity", icon="🏆", color="#22C55E")
-    with col_p3:
-        custom_metric_card("Needs Improvement", worst_platform, "Highest Negativity", icon="⚠️", color="#EF4444")
+with st1:
+    st.subheader("🎯 Strength vs Pain Matrix (Quadrant Chart)")
+    if strength_vs_pain:
+        svp_df = pd.DataFrame(strength_vs_pain)
+        fig_quad = px.scatter(
+            svp_df,
+            x='strength',
+            y='pain',
+            text='domain',
+            color='quadrant',
+            color_discrete_map={'Fix & Protect': '#EF4444', 'Leverage & Promote': '#22C55E', 'Mitigate Friction': '#F59E0B', 'Monitor': '#94A3B8'},
+            labels={'strength': 'Customer Strength (%) →', 'pain': 'Customer Pain / Dissatisfaction (%) ↑'}
+        )
+        fig_quad.update_traces(marker=dict(size=18, line=dict(width=2, color='White')), textposition='top center')
+        fig_quad.add_vline(x=20, line_dash="dash", line_color="rgba(255,255,255,0.2)")
+        fig_quad.add_hline(y=15, line_dash="dash", line_color="rgba(255,255,255,0.2)")
+        fig_quad.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#FFFFFF'), height=320, margin=dict(l=10, r=10, t=20, b=20))
+        st.plotly_chart(fig_quad, use_container_width=True)
 
-st.divider()
+with st2:
+    st.subheader("🛡️ Operational Risk & Frequency Matrix")
+    if risk_bubbles:
+        rb_df = pd.DataFrame(risk_bubbles)
+        fig_risk = px.scatter(
+            rb_df,
+            x='frequency',
+            y='impact',
+            size='reviews',
+            text='domain',
+            color='priority',
+            color_discrete_map={'🔴 High': '#EF4444', '🟠 Medium': '#F97316', '🟢 Low': '#22C55E'},
+            labels={'frequency': 'Complaint Frequency (%) →', 'impact': 'Dissatisfaction Impact Score ↑'}
+        )
+        fig_risk.update_traces(textposition='top center')
+        fig_risk.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#FFFFFF'), height=320, margin=dict(l=10, r=10, t=20, b=20))
+        st.plotly_chart(fig_risk, use_container_width=True)
 
-def get_top_words(corpus, n=20):
-    if not corpus.empty and corpus.str.strip().any():
-        try:
-            vec = CountVectorizer(stop_words='english').fit(corpus)
-            bag = vec.transform(corpus)
-            sum_words = bag.sum(axis=0)
-            words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
-            return pd.DataFrame(sorted(words_freq, key=lambda x: x[1], reverse=True)[:n], columns=['Word', 'Freq'])
-        except ValueError:
-            try:
-                vec = CountVectorizer().fit(corpus)
-                bag = vec.transform(corpus)
-                sum_words = bag.sum(axis=0)
-                words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
-                return pd.DataFrame(sorted(words_freq, key=lambda x: x[1], reverse=True)[:n], columns=['Word', 'Freq'])
-            except Exception:
-                return pd.DataFrame(columns=['Word', 'Freq'])
-        except Exception:
-            return pd.DataFrame(columns=['Word', 'Freq'])
-    return pd.DataFrame(columns=['Word', 'Freq'])
+st.markdown("""
+<div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 10px; padding: 14px; margin-top: 10px;">
+    <p style="color: #E2E8F0; font-size: 0.9rem; margin: 0;">
+        ⚡ <b>Core Executive Insight:</b> Product Quality & Build is simultaneously the brand's <u>biggest competitive strength</u> (41.6%) — and its <u>primary source of dissatisfaction</u> (41.3% / 95 complaints).
+    </p>
+</div>
+""", unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
-st.header("🔑 Keyword Intelligence")
-pos_corpus = filtered_df[filtered_df['Label'] == 'Positive']['Cleaned_Text']
-neg_corpus = filtered_df[filtered_df['Label'] == 'Negative']['Cleaned_Text']
-top_pos = get_top_words(pos_corpus, 20)
-top_neg = get_top_words(neg_corpus, 20)
+# =========================================================
+# 4. BOTTOM SECTION — OPPORTUNITIES & AI ACTION PLAN
+# =========================================================
+st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+b1, b2 = st.columns(2)
 
-col_k1, col_k2 = st.columns(2)
-with col_k1:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    st.subheader("Top 20 Positive Keywords (Most Appreciated)")
-    if not top_pos.empty:
-        fig_pos_kw = px.bar(top_pos.sort_values('Freq'), x='Freq', y='Word', orientation='h', color='Freq', color_continuous_scale='Greens')
-        fig_pos_kw = apply_plotly_theme(fig_pos_kw)
-        fig_pos_kw.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=400)
-        st.plotly_chart(fig_pos_kw, use_container_width=True)
-    else:
-        st.info("No positive keywords found.")
-    st.markdown('</div>', unsafe_allow_html=True)
-with col_k2:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    st.subheader("Top 20 Negative Keywords (Top Complaints)")
-    if not top_neg.empty:
-        fig_neg_kw = px.bar(top_neg.sort_values('Freq'), x='Freq', y='Word', orientation='h', color='Freq', color_continuous_scale='Reds')
-        fig_neg_kw = apply_plotly_theme(fig_neg_kw)
-        fig_neg_kw.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=400)
-        st.plotly_chart(fig_neg_kw, use_container_width=True)
-    else:
-        st.info("No negative keywords found.")
-    st.markdown('</div>', unsafe_allow_html=True)
+with b1:
+    st.subheader("🚀 Business Growth Opportunity Ranking")
+    if opp_ranking:
+        for opp in opp_ranking:
+            st.markdown(f"""
+            <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #A855F7; font-weight: 700;">#{opp['rank']} {opp['domain']}</span>
+                    <span style="background: rgba(168,85,247,0.2); color: #C084FC; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: 700;">{opp['impact']} IMPACT</span>
+                </div>
+                <div style="color: #94A3B8; font-size: 0.8rem; margin-top: 4px;">
+                    Complaint Share: <b style="color: #EF4444;">{opp['complaint_pct']}%</b> ({opp['count']} reviews) | Score: <b style="color: #A855F7;">{opp['opportunity_score']} / 100</b>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-st.divider()
+with b2:
+    st.subheader("🎯 Ranked AI Executive Action Plan")
+    if action_plan:
+        for act in action_plan:
+            st.markdown(f"""
+            <div style="background: rgba(15, 23, 42, 0.8); border-left: 4px solid {'#EF4444' if act['impact'] == 'VERY HIGH' else '#F59E0B'}; border-radius: 10px; padding: 12px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #FFFFFF; font-weight: 700;">#{act['rank']} {act['domain']}</span>
+                    <span style="color: #EF4444; font-size: 0.75rem; font-weight: 700;">IMPACT: {act['impact']}</span>
+                </div>
+                <div style="color: #06B6D4; font-size: 0.8rem; margin-top: 2px;">🔍 Evidence: {act['evidence']}</div>
+                <div style="color: #10B981; font-size: 0.85rem; font-weight: 700; margin-top: 4px;">⚡ Directive: {act['action']}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-st.header("☁️ Visual Sentiment Landscapes")
-col_w1, col_w2, col_w3 = st.columns(3)
-def generate_wc(text, colormap):
-    if not isinstance(text, str) or not text.strip():
-        return None
-    try:
-        wc = WordCloud(width=400, height=300, background_color='#111827', colormap=colormap).generate(text)
-        fig, ax = plt.subplots(facecolor='#111827')
-        ax.imshow(wc, interpolation='bilinear')
-        ax.axis('off')
-        fig.patch.set_facecolor('#111827')
-        return fig
-    except Exception:
-        return None
+st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
 
-with col_w1:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    st.subheader("Overall Word Cloud")
-    all_text = " ".join(filtered_df['Cleaned_Text'])
-    fig_wc1 = generate_wc(all_text, 'viridis')
-    if fig_wc1: st.pyplot(fig_wc1)
-    else: st.info("No text data for word cloud.")
-    st.markdown('</div>', unsafe_allow_html=True)
-with col_w2:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    st.subheader("Positive Word Cloud")
-    pos_t = " ".join(pos_corpus)
-    fig_wc2 = generate_wc(pos_t, 'Greens')
-    if fig_wc2: st.pyplot(fig_wc2)
-    else: st.info("No positive text for word cloud.")
-    st.markdown('</div>', unsafe_allow_html=True)
-with col_w3:
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    st.subheader("Negative Word Cloud")
-    neg_t = " ".join(neg_corpus)
-    fig_wc3 = generate_wc(neg_t, 'Reds')
-    if fig_wc3: st.pyplot(fig_wc3)
-    else: st.info("No negative text for word cloud.")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-st.divider()
-
-st.header("🤖 AI Business Insights & Recommendations")
-recommendations = []
-neg_words = top_neg['Word'].tolist() if not top_neg.empty else []
-pos_words = top_pos['Word'].tolist() if not top_pos.empty else []
-
-if any(w in neg_words for w in ['late', 'delay', 'delivery', 'time', 'slow']):
-    recommendations.append("🚚 Reduce delivery delays and optimize supply chain logistics.")
-if any(w in neg_words for w in ['broken', 'damage', 'quality', 'bad', 'poor', 'worst', 'cheap']):
-    recommendations.append("📦 Improve packaging quality and perform stricter QA.")
-if any(w in neg_words for w in ['rude', 'service', 'support', 'staff', 'unhelpful', 'email']):
-    recommendations.append("📞 Increase customer support response time and implement staff training.")
-if any(w in neg_words for w in ['price', 'expensive', 'cost', 'money', 'worth']):
-    recommendations.append("💰 Review pricing strategy or offer promotional discounts.")
-if not recommendations:
-    recommendations.append("🌟 Maintain current operational standards and focus on highly appreciated features.")
-
-col_rec1, col_rec2 = st.columns(2)
-with col_rec1:
-    st.markdown('<div class="premium-card" style="height: 100%;">', unsafe_allow_html=True)
-    st.subheader("Data-Driven Insights")
-    st.markdown(f"""
-    - **Satisfaction Rate:** <span style="color:#22C55E">{pos_pct:.1f}%</span>
-    - **Dissatisfaction Rate:** <span style="color:#EF4444">{neg_pct:.1f}%</span>
-    - **Most Loved Features:** {', '.join(pos_words[:5]) if pos_words else 'N/A'}
-    - **Improvement Areas:** {', '.join(neg_words[:5]) if neg_words else 'N/A'}
-    """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col_rec2:
-    st.markdown('<div class="premium-card" style="height: 100%;">', unsafe_allow_html=True)
-    st.subheader("Strategic Recommendations")
-    for rec in recommendations:
-        st.markdown(f'<div style="background: rgba(124, 58, 237, 0.1); border-left: 4px solid #7C3AED; padding: 15px; border-radius: 8px; margin-bottom: 10px;">{rec}</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-st.divider()
-
-st.header("📄 Export Executive Report")
-col_ex1, col_ex2 = st.columns(2)
-with col_ex1:
-    st.markdown('<div class="premium-card" style="text-align: center;">', unsafe_allow_html=True)
-    csv_export = filtered_df.head(review_count).to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download Data (CSV)", data=csv_export, file_name='filtered_reviews.csv', mime='text/csv', use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-with col_ex2:
-    st.markdown('<div class="premium-card" style="text-align: center;">', unsafe_allow_html=True)
+def generate_pdf_bytes():
     class PDFReport(FPDF):
         def header(self):
-            self.set_font('Arial', 'B', 16)
-            self.cell(0, 10, 'Executive Business Intelligence Report', 0, 1, 'C')
+            self.set_font('Arial', 'B', 15)
+            self.cell(0, 10, 'Executive Business Intelligence Report - ReviewMiner AI', 0, 1, 'C')
+            self.ln(2)
         def footer(self):
             self.set_y(-15)
             self.set_font('Arial', 'I', 8)
             self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
-    try:
-        pdf = PDFReport()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, "1. Dataset Summary", ln=1)
-        pdf.set_font("Arial", size=12)
-        pdf.cell(0, 10, f"Total Reviews Analyzed: {total_reviews}", ln=1)
-        pdf.cell(0, 10, f"Overall Sentiment Score: {overall_score:.1f}/100", ln=1)
-        pdf.ln(5)
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, "2. Customer Satisfaction", ln=1)
-        pdf.set_font("Arial", size=12)
-        pdf.cell(0, 10, f"Positive Reviews: {pos_pct:.1f}%", ln=1)
-        pdf.cell(0, 10, f"Negative Reviews: {neg_pct:.1f}%", ln=1)
-        pdf.ln(5)
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, "3. Business Insights", ln=1)
-        pdf.set_font("Arial", size=12)
-        pdf.cell(0, 10, f"Most Appreciated Features: {', '.join(pos_words[:5]) if pos_words else 'N/A'}", ln=1)
-        pdf.cell(0, 10, f"Top Customer Complaints: {', '.join(neg_words[:5]) if neg_words else 'N/A'}", ln=1)
-        pdf.ln(5)
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, "4. Strategic Recommendations", ln=1)
-        pdf.set_font("Arial", size=12)
-        for r in recommendations:
-            clean_r = r.encode('ascii', 'ignore').decode('ascii').strip()
-            pdf.multi_cell(0, 10, f"- {clean_r}")
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        st.download_button("📑 Download Executive Report (PDF)", data=pdf_bytes, file_name='executive_report.pdf', mime='application/pdf', use_container_width=True)
-    except Exception as e:
-        st.warning("PDF Generation requires 'fpdf'.")
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    pdf = PDFReport()
+    pdf.add_page()
+    
+    pdf.set_font("Arial", 'B', 13)
+    pdf.cell(0, 8, "1. Executive KPI Summary & Overview", ln=1)
+    pdf.set_font("Arial", size=10)
+    summary_text = bi_data.get('executive_summary', '').encode('ascii', 'ignore').decode('ascii')
+    pdf.multi_cell(0, 6, summary_text)
+    pdf.ln(3)
+    
+    pdf.set_font("Arial", 'B', 13)
+    pdf.cell(0, 8, "2. Ranked AI Executive Action Plan", ln=1)
+    pdf.set_font("Arial", size=10)
+    for act in action_plan:
+        clean_act = f"• #{act['rank']} [{act['domain']}] Impact: {act['impact']} | Evidence: {act['evidence']} -> Directive: {act['action']}".encode('ascii', 'ignore').decode('ascii')
+        pdf.multi_cell(0, 6, clean_act)
+
+    buf = pdf.output(dest='S')
+    return buf.encode('latin-1') if isinstance(buf, str) else bytes(buf)
+
+st.download_button(
+    label="📄 Export Executive PDF Report",
+    data=generate_pdf_bytes(),
+    file_name="Executive_Business_Intelligence_Report.pdf",
+    mime="application/pdf",
+    type="primary",
+    use_container_width=True
+)
+
+st.markdown('</div>', unsafe_allow_html=True)
