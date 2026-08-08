@@ -13,7 +13,34 @@ def ensure_default_dataset():
     global ACTIVE_DATASET_ID
     if ACTIVE_DATASET_ID and ACTIVE_DATASET_ID in STORED_DATASETS:
         return
-        
+
+    import os
+    target_csv = None
+    for candidate in ["online_review.csv", "sample_reviews_dataset.csv"]:
+        if os.path.exists(candidate):
+            target_csv = candidate
+            break
+
+    if target_csv:
+        try:
+            df = pd.read_csv(target_csv)
+            auto_text, auto_label, auto_plat = auto_detect_columns(df)
+            dataset_id = target_csv
+            STORED_DATASETS[dataset_id] = {
+                "name": dataset_id,
+                "raw_df": df,
+                "processed_df": None,
+                "text_col": auto_text,
+                "label_col": auto_label,
+                "plat_col": auto_plat,
+                "has_labels": auto_label is not None
+            }
+            ACTIVE_DATASET_ID = dataset_id
+            process_dataset(dataset_id, auto_text, auto_label, auto_plat)
+            return
+        except Exception as e:
+            print(f"[DEFAULT_DATASET_ERROR] Failed loading {target_csv}: {e}")
+            
     sample_reviews = [
         {"Product_name": "Pro Smartphone Ultra", "Review": "The battery life is incredible and charging speed is very fast. Display screen is bright and crystal clear.", "Rating": 5, "Label": "Positive", "Window": "Web Store"},
         {"Product_name": "Pro Smartphone Ultra", "Review": "Great build quality and premium material finish. Performance is smooth with zero lag.", "Rating": 5, "Label": "Positive", "Window": "Mobile App"},
@@ -175,6 +202,7 @@ async def map_columns(dataset_id: str = Form(...), text_col: str = Form(...), la
 
 @router.get("/active")
 async def get_active_dataset_info():
+    ensure_default_dataset()
     if not ACTIVE_DATASET_ID or ACTIVE_DATASET_ID not in STORED_DATASETS:
         return {"active": False, "message": "No active dataset loaded."}
     ds = STORED_DATASETS[ACTIVE_DATASET_ID]
@@ -184,6 +212,7 @@ async def get_active_dataset_info():
         "dataset_id": ACTIVE_DATASET_ID,
         "name": ds["name"],
         "row_count": len(pdf) if pdf is not None else 0,
+        "total_rows": len(pdf) if pdf is not None else 0,
         "has_labels": ds["has_labels"],
         "columns": ds["raw_df"].columns.tolist(),
         "mapped": {
