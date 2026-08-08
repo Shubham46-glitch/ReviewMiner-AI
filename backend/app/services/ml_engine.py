@@ -50,6 +50,7 @@ class MLEngine:
         self.classes = []
         self.dataset_id = None
         self.pipeline = None
+        self.last_results = None
 
     def invalidate_model(self):
         self.vectorizer = None
@@ -58,10 +59,14 @@ class MLEngine:
         self.classes = []
         self.dataset_id = None
         self.pipeline = None
+        self.last_results = None
 
     def train_model(self, df: pd.DataFrame, dataset_id: str = None, text_col: str = None, label_col: str = None):
         if df is None or df.empty:
             raise ValueError("No active dataset loaded for Machine Learning.")
+
+        if dataset_id and self.dataset_id == dataset_id and self.last_results is not None:
+            return self.last_results
 
         auto_text, _, _ = auto_detect_columns(df)
         t_col = text_col or auto_text or ('Text' if 'Text' in df.columns else df.columns[0])
@@ -97,14 +102,14 @@ class MLEngine:
         try:
             self.vectorizer = TfidfVectorizer(
                 ngram_range=(1, 2),
-                max_features=10000,
+                max_features=2500,
                 stop_words=CUSTOM_STOP_WORDS,
                 sublinear_tf=True,
                 min_df=1
             )
             X_vec = self.vectorizer.fit_transform(X_raw)
         except Exception:
-            self.vectorizer = TfidfVectorizer(ngram_range=(1, 2), max_features=10000, min_df=1)
+            self.vectorizer = TfidfVectorizer(ngram_range=(1, 2), max_features=2500, min_df=1)
             X_vec = self.vectorizer.fit_transform(X_raw)
 
         min_class_samples = min(class_counts.values()) if class_counts else 0
@@ -121,13 +126,10 @@ class MLEngine:
         else:
             X_train, X_test, y_train, y_test, idx_train, idx_test = X_vec, X_vec, y_raw, y_raw, valid_df.index, valid_df.index
 
-        cv_splits = min(3, max(2, min_class_samples)) if min_class_samples >= 2 else 2
-        svm_model = CalibratedClassifierCV(estimator=LinearSVC(random_state=42), cv=cv_splits) if can_stratify and min_class_samples >= 2 else LinearSVC(random_state=42)
-
         models_dict = {
             "Multinomial Naive Bayes": MultinomialNB(),
-            "Logistic Regression": LogisticRegression(max_iter=1000, random_state=42),
-            "Linear SVM": svm_model
+            "Logistic Regression": LogisticRegression(max_iter=500, random_state=42),
+            "Linear SVM": LinearSVC(random_state=42, max_iter=1000)
         }
 
         average_type = 'binary' if num_classes == 2 else 'weighted'
@@ -244,7 +246,7 @@ class MLEngine:
         print(f"[SENTIMENT_ML_DEBUG] Trained Bigram TF-IDF Sentiment Model. Text Col: '{t_col}', Target Col: '{l_col}'. Classes: {unique_classes}. Winning Model: {winning_name}")
 
         best_metrics = results_by_model[winning_name]
-        return {
+        res_output = {
             "target_info": {
                 "target_column": l_col,
                 "text_column": t_col,
@@ -278,6 +280,8 @@ class MLEngine:
             "test_predictions": test_predictions_list,
             "misclassifications": misclassified_list
         }
+        self.last_results = res_output
+        return res_output
 
     def predict_sentiment(self, text: str):
         if not text or not isinstance(text, str):

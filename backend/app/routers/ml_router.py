@@ -4,14 +4,13 @@ from backend.app.services.ml_engine import GLOBAL_ML_ENGINE
 
 router = APIRouter(prefix="/api/ml", tags=["Machine Learning"])
 
+@router.get("/train")
 @router.post("/train")
 async def train_model():
-    if not dataset_router.ACTIVE_DATASET_ID or dataset_router.ACTIVE_DATASET_ID not in dataset_router.STORED_DATASETS:
-        dataset_router.ensure_default_dataset()
-        
+    dataset_router.ensure_default_dataset()
     active_id = dataset_router.ACTIVE_DATASET_ID
-    ds = dataset_router.STORED_DATASETS[active_id]
-    pdf = ds["processed_df"]
+    ds = dataset_router.STORED_DATASETS.get(active_id)
+    pdf = ds["processed_df"] if ds else None
     
     if pdf is None or pdf.empty:
         raise HTTPException(status_code=400, detail="Processed dataset is empty.")

@@ -22,6 +22,10 @@ export const MachineLearning: React.FC<MLProps> = ({ onNavigate }) => {
   // Explorer filter state
   const [explorerFilter, setExplorerFilter] = useState<'ALL' | 'CORRECT' | 'MISCLASSIFIED'>('ALL');
 
+  React.useEffect(() => {
+    handleTrain();
+  }, []);
+
   const handleTrain = async () => {
     setLoading(true);
     setError(null);
